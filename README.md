@@ -24,6 +24,11 @@ The pull-up pin is high when the USB device is connected.
 
 The layout is the same for all boards.
 
+The flash size is different on each part. For example, the STM32F103C8
+has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
+size from the flash size register (`0x1FFFF7E0`) at run time. It sends a
+NACK (negative acknowledge) for a write or an erase outside the flash.
+
 ## Build
 
 You need the Arm GNU toolchain (`arm-none-eabi-gcc`) and GNU make.
