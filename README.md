@@ -61,4 +61,46 @@ The Eclipse project (`.cproject`) builds the OtherUse board only.
    stm32flash -w app.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
-When the key is not down at reset, the bootloader starts the application.
+When the key is not down at reset and no boot request is set, the
+bootloader starts the application.
+
+## Start the bootloader from the application
+
+An application starts the bootloader with a boot request in the backup
+register `BKP->DR1`. Applications depend on this contract:
+
+| Item | Value |
+|---|---|
+| Register | `BKP->DR1` |
+| Boot request value | `0xB007` |
+
+The application does these steps:
+
+1. Enable the `PWR` and `BKP` clocks.
+2. Set `PWR_CR.DBP` to enable write access to the backup domain.
+3. Write `0xB007` to `BKP->DR1`.
+4. Call `NVIC_SystemReset()`.
+
+```c
+RCC->APB1ENR |= RCC_APB1ENR_PWREN | RCC_APB1ENR_BKPEN;
+PWR->CR |= PWR_CR_DBP;
+BKP->DR1 = 0xB007;
+NVIC_SystemReset();
+```
+
+After the reset, the bootloader reads `BKP->DR1`. If the value is
+`0xB007`, the bootloader clears the register and stays in bootloader mode.
+This is the same behavior as with the key down. The next reset without a
+request starts the application again.
+
+The bootloader checks the request after the clock and USB setup, before
+it reads the key. A system reset does not clear `BKP->DR1`. A power-up
+clears `BKP->DR1` only when the backup domain (VBAT) had no power.
+
+### Deprecated: `entryFromProgram()`
+
+An application can also call `entryFromProgram()` in the bootloader. This
+function is deprecated. Its address changes with the linker script and the
+device density. It also starts with the hardware state of the application,
+so the host does not always see a USB disconnect. Use the boot request in
+`BKP->DR1` instead.
