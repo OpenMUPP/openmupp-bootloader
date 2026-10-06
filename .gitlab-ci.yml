@@ -18,8 +18,8 @@ workflow:
       when: never
     - if: "$CI_COMMIT_BRANCH"
 
-# The linker script limits the bootloader to 10 KB, so an image that
-# does not fit fails the link.
+# The build fails when an image is larger than the bootloader area (10 KB).
+# The linker script and a size check after the link both enforce the limit.
 build:
   stage: build
   parallel:
@@ -27,7 +27,12 @@ build:
       - BOARD: [mini, otheruse]
   script:
     - cd "$CI_PROJECT_DIR"
-    - make -j`nproc` BOARD=${BOARD} CROSS_COMPILE=${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-
+    - cmake --preset ${BOARD} -DARM_GNU_TOOLCHAIN=${GCC_TOOLCHAIN_PREFIX}
+    - cmake --build --preset ${BOARD} -j`nproc`
+    # The Makefile build is the reference: the images must be the same.
+    - make -j`nproc` BOARD=${BOARD} BUILD_ROOT=build-make CROSS_COMPILE=${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-
+    - cmp build/${BOARD}/versaloon-bootloader-${BOARD}.bin build-make/${BOARD}/versaloon-bootloader-${BOARD}.bin
+    - cmp build/${BOARD}/versaloon-bootloader-${BOARD}.hex build-make/${BOARD}/versaloon-bootloader-${BOARD}.hex
   artifacts:
     paths:
       - build/${BOARD}/*.elf

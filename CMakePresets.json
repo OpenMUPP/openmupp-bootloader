@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake"
+    },
+    {
+      "name": "mini",
+      "displayName": "Versaloon Mini",
+      "inherits": "base",
+      "cacheVariables": { "VERSALOON_BOOTLOADER_BOARDS": "mini" }
+    },
+    {
+      "name": "otheruse",
+      "displayName": "OtherUse",
+      "inherits": "base",
+      "cacheVariables": { "VERSALOON_BOOTLOADER_BOARDS": "otheruse" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "mini", "configurePreset": "mini" },
+    { "name": "otheruse", "configurePreset": "otheruse" }
+  ]
+}
