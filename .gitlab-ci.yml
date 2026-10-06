@@ -29,6 +29,10 @@ build:
     - cd "$CI_PROJECT_DIR"
     - cmake --preset ${BOARD} -DARM_GNU_TOOLCHAIN=${GCC_TOOLCHAIN_PREFIX}
     - cmake --build --preset ${BOARD} -j`nproc`
+    # The Makefile build is the reference: the images must be the same.
+    - make -j`nproc` BOARD=${BOARD} BUILD_ROOT=build-make CROSS_COMPILE=${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-
+    - cmp build/${BOARD}/versaloon-bootloader-${BOARD}.bin build-make/${BOARD}/versaloon-bootloader-${BOARD}.bin
+    - cmp build/${BOARD}/versaloon-bootloader-${BOARD}.hex build-make/${BOARD}/versaloon-bootloader-${BOARD}.hex
   artifacts:
     paths:
       - build/${BOARD}/*.elf
