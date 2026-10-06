@@ -19,8 +19,6 @@ endif()
 
 set(CMAKE_C_COMPILER   "${_tool_prefix}gcc")
 set(CMAKE_ASM_COMPILER "${_tool_prefix}gcc")
-set(CMAKE_OBJCOPY      "${_tool_prefix}objcopy" CACHE INTERNAL "")
-set(CMAKE_SIZE         "${_tool_prefix}size"    CACHE INTERNAL "")
 
 # Do not link a test program: the linker scripts need the project memory map.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)

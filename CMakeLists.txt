@@ -8,6 +8,17 @@ endif()
 
 project(versaloon-bootloader LANGUAGES C)
 
+if(NOT CMAKE_CROSSCOMPILING)
+    message(FATAL_ERROR
+        "The bootloader needs a cross toolchain for the Cortex-M3. Set "
+        "CMAKE_TOOLCHAIN_FILE before the first project() call in the "
+        "parent project, for example cmake/arm-none-eabi.cmake.")
+endif()
+
+# Get the size tool from the compiler name: arm-none-eabi-gcc gives
+# arm-none-eabi-size. CMake sets CMAKE_OBJCOPY for the GNU toolchain.
+string(REGEX REPLACE "gcc$" "size" _size_tool "${CMAKE_C_COMPILER}")
+
 # Boards to build. One image is built for each board.
 set(VERSALOON_BOOTLOADER_BOARDS "mini;otheruse" CACHE STRING
     "Boards to build: mini (Versaloon Mini), otheruse (OtherUse)")
@@ -70,7 +81,8 @@ foreach(_board IN LISTS VERSALOON_BOOTLOADER_BOARDS)
 
     target_compile_options(${_target} PRIVATE
         ${_arch} -Os -g3
-        -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections)
+        -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections
+        "-ffile-prefix-map=${_dir}=.")
 
     set(_map "${CMAKE_CURRENT_BINARY_DIR}/${_target}.map")
     target_link_options(${_target} PRIVATE
@@ -83,12 +95,15 @@ foreach(_board IN LISTS VERSALOON_BOOTLOADER_BOARDS)
 
     set(_out "${CMAKE_CURRENT_BINARY_DIR}/${_target}")
     add_custom_command(TARGET ${_target} POST_BUILD
-        COMMAND "${CMAKE_SIZE}" "$<TARGET_FILE:${_target}>"
+        COMMAND "${_size_tool}" "$<TARGET_FILE:${_target}>"
         COMMAND "${CMAKE_OBJCOPY}" -O ihex "$<TARGET_FILE:${_target}>" "${_out}.hex"
         COMMAND "${CMAKE_OBJCOPY}" -O binary "$<TARGET_FILE:${_target}>" "${_out}.bin"
         COMMAND "${CMAKE_COMMAND}" -DIMAGE=${_out}.bin
+                "-DREMOVE_ON_FAIL=${_out}.hex$<SEMICOLON>$<TARGET_FILE:${_target}>"
                 -DMAX_SIZE=${VERSALOON_BOOTLOADER_AREA_SIZE}
                 -P "${_dir}/cmake/check-size.cmake"
         BYPRODUCTS "${_out}.hex" "${_out}.bin"
         VERBATIM)
+
+    install(FILES "${_out}.elf" "${_out}.hex" "${_out}.bin" DESTINATION .)
 endforeach()
