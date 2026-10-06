@@ -43,7 +43,8 @@ cmake --build --preset mini
 
 Use the preset `otheruse` for the OtherUse board.
 
-The build writes these files to `build/<board>/`:
+The build writes these files to the build directory. A preset uses
+`build/<board>/`:
 
 - `versaloon-bootloader-<board>.elf`
 - `versaloon-bootloader-<board>.hex`
@@ -51,7 +52,7 @@ The build writes these files to `build/<board>/`:
 - `versaloon-bootloader-<board>.map`
 
 The build fails when the image is larger than the bootloader area
-(10 KB).
+(10 KB). In that case the build removes the image files.
 
 The toolchain file `cmake/arm-none-eabi.cmake` finds the compiler in the
 `PATH`. To use another toolchain, set `ARM_GNU_TOOLCHAIN` to the root
@@ -75,13 +76,17 @@ select the boards.
 
 A parent project can also build the repository with `ExternalProject`.
 Pass `CMAKE_TOOLCHAIN_FILE` and `VERSALOON_BOOTLOADER_BOARDS` in
-`CMAKE_ARGS`. The build directory of the external project then has the
-flashable `.bin` and `.hex` files.
+`CMAKE_ARGS`. The install step copies the `.elf`, `.hex` and `.bin`
+files of each board to `CMAKE_INSTALL_PREFIX`. The same files are in the
+build directory of the external project.
+
+The parent project must set a cross toolchain before its first
+`project()` call. Without one, the configure step stops with an error.
 
 ### Makefile
 
-The `Makefile` is an alternative build. It makes the same images as the
-CMake build.
+The `Makefile` is an alternative build. It makes the same `.hex` and
+`.bin` files as the CMake build. CI builds both and compares the files.
 
 ```sh
 make                 # all boards
