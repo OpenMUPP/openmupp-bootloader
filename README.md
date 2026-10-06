@@ -31,25 +31,65 @@ NACK (negative acknowledge) for a write or an erase outside the flash.
 
 ## Build
 
-You need the Arm GNU toolchain (`arm-none-eabi-gcc`) and GNU make.
+You need CMake 3.21 or later and the Arm GNU toolchain
+(`arm-none-eabi-gcc`).
 
-To build the bootloader for all boards:
-
-```sh
-make
-```
-
-To build the bootloader for one board:
+Each board has a CMake preset. To build the bootloader for one board:
 
 ```sh
-make BOARD=mini
+cmake --preset mini
+cmake --build --preset mini
 ```
 
-The build writes `build/<board>/versaloon-bootloader-<board>.{elf,hex,bin}`.
-To use a different output directory, set `BUILD_ROOT`.
-To use a different toolchain prefix, set `CROSS_COMPILE`.
+Use the preset `otheruse` for the OtherUse board.
 
-The Eclipse project (`.cproject`) builds the OtherUse board only.
+The build writes these files to `build/<board>/`:
+
+- `versaloon-bootloader-<board>.elf`
+- `versaloon-bootloader-<board>.hex`
+- `versaloon-bootloader-<board>.bin`
+- `versaloon-bootloader-<board>.map`
+
+The build fails when the image is larger than the bootloader area
+(10 KB).
+
+The toolchain file `cmake/arm-none-eabi.cmake` finds the compiler in the
+`PATH`. To use another toolchain, set `ARM_GNU_TOOLCHAIN` to the root
+directory of the toolchain. You can set it as a CMake variable
+(`-DARM_GNU_TOOLCHAIN=<dir>`) or as an environment variable.
+
+Without a preset, the option `VERSALOON_BOOTLOADER_BOARDS` selects the
+boards. The default builds all boards.
+
+```sh
+cmake -S . -B build/all -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
+cmake --build build/all
+```
+
+### Use in a parent project
+
+A parent project can add this repository with `add_subdirectory()`. The
+parent project sets the toolchain. The targets are
+`versaloon-bootloader-<board>`. Set `VERSALOON_BOOTLOADER_BOARDS` to
+select the boards.
+
+A parent project can also build the repository with `ExternalProject`.
+Pass `CMAKE_TOOLCHAIN_FILE` and `VERSALOON_BOOTLOADER_BOARDS` in
+`CMAKE_ARGS`. The build directory of the external project then has the
+flashable `.bin` and `.hex` files.
+
+### Makefile
+
+The `Makefile` is an alternative build. It makes the same images as the
+CMake build.
+
+```sh
+make                 # all boards
+make BOARD=mini      # one board
+```
+
+The `Makefile` writes `build/<board>/versaloon-bootloader-<board>.*`.
+To use another toolchain prefix, set `CROSS_COMPILE`.
 
 ## Use
 
