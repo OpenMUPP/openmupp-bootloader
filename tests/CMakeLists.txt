@@ -16,6 +16,7 @@ add_executable(vsl-bootloader-tests
         TestAn3155Protocol.cpp
         TestLayout.cpp
         TestMemoryMap.cpp
+        TestStm32flashSequences.cpp
         "${PROJECT_SOURCE_DIR}/src/protocol/An3155Protocol.cpp")
 set_target_properties(vsl-bootloader-tests PROPERTIES
         CXX_STANDARD 23
