@@ -13,4 +13,4 @@ target_link_options(app PRIVATE -mcpu=cortex-m3 -mthumb -nostdlib
 vsl_stamp_image(app
     BIN "${CMAKE_CURRENT_BINARY_DIR}/app.bin"
     HEX "${CMAKE_CURRENT_BINARY_DIR}/app.hex"
-    MAX_LENGTH 53248)
+    MAX_LENGTH 55296)

@@ -16,7 +16,8 @@ Usage:
     vsl-stamp-image.py <image.elf> [--bin <out.bin>] [--hex <out.hex>]
     vsl-stamp-image.py --check <image.bin> --base <address>
 
-Python 3 standard library only. The ELF mode needs arm-none-eabi-objcopy.
+Python 3.7 or later, standard library only. The ELF mode needs
+arm-none-eabi-objcopy.
 """
 
 import argparse
@@ -39,6 +40,12 @@ CRC_ZERO_START = MAGIC_OFFSET
 CRC_ZERO_END = CRC_OFFSET + 4
 
 MIN_LENGTH = 64
+# Largest flash of the STM32F103x8/xB. Without --max-length, the tool
+# refuses a larger image, for example a section in RAM without a load address.
+MAX_FLASH = 128 * 1024
+PT_LOAD = 1
+SHT_NOBITS = 8
+SHF_ALLOC = 2
 RAM_START = 0x20000000
 RAM_SIZE = 20 * 1024
 VECTOR_SECTION = ".isr_vector"
@@ -145,24 +152,43 @@ def check(image, base, max_length=None):
     return errors
 
 
-def _read_section(elf_data, name):
-    """Return (address, size) of an ELF32 little-endian section."""
+def _loaded_sections(elf_data):
+    """Return {name: (load address, size)} of the sections with content in flash.
+
+    These are the sections that objcopy -O binary writes. The load address
+    (LMA) comes from the program header of the segment that holds the
+    section.
+    """
     if elf_data[:4] != b"\x7fELF" or elf_data[4] != 1 or elf_data[5] != 1:
         raise StampError("not an ELF32 little-endian file")
-    shoff, = struct.unpack_from("<I", elf_data, 0x20)
-    shentsize, shnum, shstrndx = struct.unpack_from("<HHH", elf_data, 0x2E)
+    phoff, shoff = struct.unpack_from("<II", elf_data, 0x1C)
+    phentsize, phnum, shentsize, shnum, shstrndx = struct.unpack_from("<HHHHH", elf_data, 0x2A)
 
-    def header(index):
+    segments = []
+    for index in range(phnum):
+        p_type, _, p_vaddr, p_paddr, p_filesz, _ = struct.unpack_from(
+            "<IIIIII", elf_data, phoff + index * phentsize)
+        if p_type == PT_LOAD:
+            segments.append((p_vaddr, p_paddr, p_filesz))
+
+    def section(index):
         return struct.unpack_from("<IIIIII", elf_data, shoff + index * shentsize)
 
-    strtab_offset = header(shstrndx)[4]
+    strtab_offset = section(shstrndx)[4]
+    sections = {}
     for index in range(shnum):
-        name_offset, _, _, addr, _, size = header(index)
+        name_offset, sh_type, flags, vma, _, size = section(index)
+        if not flags & SHF_ALLOC or sh_type == SHT_NOBITS or size == 0:
+            continue
         start = strtab_offset + name_offset
-        section_name = elf_data[start:elf_data.index(b"\0", start)].decode()
-        if section_name == name:
-            return addr, size
-    raise StampError(f"the ELF file has no {name} section")
+        name = elf_data[start:elf_data.index(b"\0", start)].decode()
+        for p_vaddr, p_paddr, p_filesz in segments:
+            if p_vaddr <= vma and vma + size <= p_vaddr + p_filesz:
+                sections[name] = (p_paddr + (vma - p_vaddr), size)
+                break
+        else:
+            raise StampError(f"no loadable segment holds the {name} section")
+    return sections
 
 
 def _run(command):
@@ -174,14 +200,27 @@ def _run(command):
 def stamp_elf(elf, objcopy, bin_out=None, hex_out=None, max_length=None):
     """Write the header into the .isr_vector section of the ELF file."""
     with open(elf, "rb") as f:
-        address, size = _read_section(f.read(), VECTOR_SECTION)
+        elf_data = f.read()
+    sections = _loaded_sections(elf_data)
+    if VECTOR_SECTION not in sections:
+        raise StampError(f"the ELF file has no {VECTOR_SECTION} section")
+    address, size = sections[VECTOR_SECTION]
     if size < HEADER_END:
         raise StampError(f"the {VECTOR_SECTION} section is only {size} bytes")
+    # Check the size before objcopy makes the binary image: a section in RAM
+    # without a load address in flash gives an image of hundreds of MB.
+    limit = MAX_FLASH if max_length is None else max_length
+    span = (max(lma + size for lma, size in sections.values())
+            - min(lma for lma, _ in sections.values()))
+    if span > limit:
+        raise StampError(f"the image is {span} bytes, the limit is {limit} bytes")
 
     with tempfile.TemporaryDirectory() as tmp:
         image_file = os.path.join(tmp, "image.bin")
         vectors_file = os.path.join(tmp, "vectors.bin")
-        _run([objcopy, "-O", "binary", elf, image_file])
+        # Fill the gaps between the sections with 0xFF, as in erased flash. A
+        # debug probe writes only the sections, so the gaps stay erased.
+        _run([objcopy, "-O", "binary", "--gap-fill", "0xff", elf, image_file])
         _run([objcopy, "-O", "binary", "-j", VECTOR_SECTION, elf, vectors_file])
         with open(image_file, "rb") as f:
             image = f.read()
@@ -197,13 +236,20 @@ def stamp_elf(elf, objcopy, bin_out=None, hex_out=None, max_length=None):
 
         with open(vectors_file, "wb") as f:
             f.write(stamped[:len(vectors)])
-        # Write to a copy first, so a failure does not leave a damaged ELF.
-        stamped_elf = os.path.join(tmp, "stamped.elf")
-        _run([objcopy, "--update-section", f"{VECTOR_SECTION}={vectors_file}", elf, stamped_elf])
-        shutil.copyfile(stamped_elf, elf)
+        # Write a copy next to the ELF file, then replace the ELF file in one
+        # step. A failure does not leave a damaged ELF file.
+        stamped_elf = elf + ".stamp.tmp"
+        try:
+            _run([objcopy, "--update-section", f"{VECTOR_SECTION}={vectors_file}", elf, stamped_elf])
+            shutil.copymode(elf, stamped_elf)
+            os.replace(stamped_elf, elf)
+        finally:
+            if os.path.exists(stamped_elf):
+                os.remove(stamped_elf)
 
+        # The .bin and .hex files are the full image with the gaps and the
+        # padding as 0xFF, the same bytes as the CRC.
         if bin_out:
-            # Write the padded image: the CRC covers the padding.
             with open(bin_out, "wb") as f:
                 f.write(stamped)
         if hex_out:

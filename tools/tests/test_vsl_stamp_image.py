@@ -23,7 +23,7 @@ _spec = importlib.util.spec_from_file_location(
 tool = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tool)
 
-BASE = 0x08002000
+BASE = 0x08002800
 GCC = shutil.which("arm-none-eabi-gcc")
 OBJCOPY = shutil.which("arm-none-eabi-objcopy")
 
@@ -115,7 +115,7 @@ class StampTest(unittest.TestCase):
         self.assertEqual(tool.stamp(make_image())[0x1C:0x20], b"VSL1")
 
     def test_stamped_image_is_valid(self):
-        self.assertEqual(tool.check(tool.stamp(make_image()), BASE, 52 * 1024), [])
+        self.assertEqual(tool.check(tool.stamp(make_image()), BASE, 54 * 1024), [])
 
     def test_stamp_again_gives_the_same_image(self):
         stamped = tool.stamp(make_image())
@@ -205,17 +205,37 @@ class ElfTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.dir = self.tmp.name
         self.elf = self.path("app.elf")
-        subprocess.run([GCC, "-mcpu=cortex-m3", "-mthumb", "-Os", "-nostdlib",
-                        "-T", os.path.join(PROJECT, "app.ld"), os.path.join(PROJECT, "app.c"),
-                        "-o", self.elf],
-                       check=True)
+        self.link(os.path.join(PROJECT, "app.ld"))
 
     def path(self, name):
         return os.path.join(self.dir, name)
 
+    def link(self, linker_script):
+        subprocess.run([GCC, "-mcpu=cortex-m3", "-mthumb", "-Os", "-nostdlib",
+                        "-T", linker_script, os.path.join(PROJECT, "app.c"), "-o", self.elf],
+                       check=True)
+
+    def link_with(self, replace, by):
+        with open(os.path.join(PROJECT, "app.ld")) as f:
+            script = f.read()
+        self.assertIn(replace, script)
+        with open(self.path("changed.ld"), "w") as f:
+            f.write(script.replace(replace, by))
+        self.link(self.path("changed.ld"))
+
+    def probe_view(self, elf):
+        """The flash content after a probe writes the ELF: only the sections, the rest erased."""
+        hex_file = self.path("probe.hex")
+        out = self.path("probe.bin")
+        subprocess.run([OBJCOPY, "-O", "ihex", elf, hex_file], check=True)
+        subprocess.run([OBJCOPY, "-I", "ihex", "-O", "binary", "--gap-fill", "0xff", hex_file, out],
+                       check=True)
+        with open(out, "rb") as f:
+            return f.read()
+
     def objcopy_bin(self, elf):
         out = self.path("objcopy.bin")
-        subprocess.run([OBJCOPY, "-O", "binary", elf, out], check=True)
+        subprocess.run([OBJCOPY, "-O", "binary", "--gap-fill", "0xff", elf, out], check=True)
         with open(out, "rb") as f:
             return f.read()
 
@@ -229,11 +249,11 @@ class ElfTest(unittest.TestCase):
 
         with open(self.path("app.bin"), "rb") as f:
             stamped = f.read()
-        self.assertEqual(tool.check(stamped, BASE, 52 * 1024), [])
+        self.assertEqual(tool.check(stamped, BASE, 54 * 1024), [])
         self.assertEqual(stamped, tool.stamp(unstamped))
 
         # The ELF has the same content, so a probe also writes the header.
-        self.assertEqual(self.objcopy_bin(self.elf), stamped)
+        self.assertEqual(self.probe_view(self.elf), stamped)
 
         # The HEX file has the same content at the application start.
         hex_bin = self.path("hex.bin")
@@ -242,8 +262,42 @@ class ElfTest(unittest.TestCase):
         with open(hex_bin, "rb") as f:
             self.assertEqual(f.read(), stamped)
         with open(self.path("app.hex")) as f:
-            # Extended linear address record for 0x0800.
-            self.assertIn(":020000040800F2", f.read())
+            hex_text = f.read()
+        # Extended linear address record for 0x0800, first data record at 0x2800.
+        self.assertIn(":020000040800F2", hex_text)
+        self.assertIn(":102800", hex_text)
+
+    def test_gap_between_sections_counts_as_erased(self):
+        out = self.path("zero-gap.bin")
+        subprocess.run([OBJCOPY, "-O", "binary", self.elf, out], check=True)
+        with open(out, "rb") as f:
+            zero_gap = f.read()
+        # The test image has a gap; objcopy fills it with 0x00 by default.
+        self.assertNotEqual(zero_gap, self.objcopy_bin(self.elf))
+        self.assertEqual(self.run_tool(), 0)
+        self.assertEqual(tool.check(self.probe_view(self.elf), BASE, 54 * 1024), [])
+
+    def test_vector_table_with_load_address(self):
+        # .isr_vector linked into RAM and loaded from flash: the header and the
+        # HEX file use the load address.
+        self.link_with(".isr_vector : { KEEP(*(.isr_vector)) } > FLASH",
+                       ".isr_vector : { KEEP(*(.isr_vector)) } > RAM AT > FLASH")
+        self.assertEqual(self.run_tool("--hex", self.path("app.hex")), 0)
+        self.assertEqual(tool.check(self.probe_view(self.elf), BASE, 54 * 1024), [])
+        with open(self.path("app.hex")) as f:
+            self.assertIn(":102800", f.read())
+
+    def test_section_without_load_address(self):
+        # .data in RAM without AT > FLASH: the image would span 0x08002800 to
+        # 0x20000000. The tool refuses it without a large temporary file.
+        self.link_with(".data : { *(.data*) } > RAM AT > FLASH", ".data : { *(.data*) } > RAM")
+        before = self.probe_view(self.elf)
+        self.assertEqual(self.run_tool(), 1)
+        self.assertEqual(self.probe_view(self.elf), before)
+
+    def test_no_temporary_file_left(self):
+        self.assertEqual(self.run_tool(), 0)
+        self.assertEqual(sorted(os.listdir(self.dir)), ["app.elf"])
 
     def test_stamp_twice(self):
         self.assertEqual(self.run_tool(), 0)
@@ -273,10 +327,11 @@ class CmakeTest(unittest.TestCase):
             subprocess.run([CMAKE, "--build", build], check=True, stdout=subprocess.DEVNULL)
             with open(os.path.join(build, "app.bin"), "rb") as f:
                 stamped = f.read()
-            self.assertEqual(tool.check(stamped, BASE, 52 * 1024), [])
+            self.assertEqual(tool.check(stamped, BASE, 54 * 1024), [])
             self.assertTrue(os.path.exists(os.path.join(build, "app.hex")))
             elf_bin = os.path.join(build, "elf.bin")
-            subprocess.run([OBJCOPY, "-O", "binary", os.path.join(build, "app.elf"), elf_bin],
+            subprocess.run([OBJCOPY, "-O", "binary", "--gap-fill", "0xff",
+                            os.path.join(build, "app.elf"), elf_bin],
                            check=True)
             with open(elf_bin, "rb") as f:
                 self.assertEqual(f.read(), stamped)
