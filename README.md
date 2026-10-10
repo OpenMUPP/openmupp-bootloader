@@ -109,6 +109,79 @@ To use another toolchain prefix, set `CROSS_COMPILE`.
 When the key is not down at reset and no boot request is set, the
 bootloader starts the application.
 
+## Application image header
+
+Each application image has a header with a CRC (cyclic redundancy check).
+The rewritten bootloader starts only an application with a valid header. Thus a
+half-written application does not start. The current bootloader ignores
+the header, so a stamped image also runs behind it.
+
+The header uses the reserved words of the Cortex-M3 vector table, at the
+start of the application:
+
+| Offset | Content |
+|---|---|
+| `0x1C` | Magic `0x314C5356` (`"VSL1"` in memory) |
+| `0x20` | Image length in bytes, a multiple of 4, from the application start |
+| `0x24` | CRC32 of the image |
+| `0x28` | Reserved, `0` |
+
+The CRC uses the algorithm of the STM32F1 CRC unit (CRC-32/MPEG-2):
+
+- Polynomial `0x04C11DB7`, initial value `0xFFFFFFFF`.
+- The input is 32-bit little-endian words. The unit reads each word from
+  the most significant bit.
+- No reflection and no final XOR.
+
+The CRC covers the full image. The words at `0x1C` to `0x27` count as
+zero. The test vectors are in `tests/vectors/crc32-stm32.txt`.
+
+An application is valid when all of these rules are true:
+
+- The magic is correct.
+- The length is between 64 bytes and the size of the application area.
+- The CRC is correct.
+- The initial stack pointer (word `0x00`) is in RAM.
+- The reset vector (word `0x04`) is odd and inside the image.
+
+### Stamp tool
+
+`tools/vsl-stamp-image.py` adds the header to an ELF image. It needs
+Python 3 and `arm-none-eabi-objcopy`, and no other packages.
+
+```sh
+tools/vsl-stamp-image.py app.elf --bin app.bin --hex app.hex
+```
+
+- The tool writes the header into the `.isr_vector` section of the ELF
+  file. Thus an image that a debug probe writes also has the header.
+- `--bin` and `--hex` write the stamped image as a binary file and an
+  Intel HEX file.
+- `--max-length <bytes>` is the size of the application area. The tool
+  fails when the image is larger.
+- The tool refuses an image where the words `0x1C` to `0x2B` are not zero.
+  An image that has a header already gets a new header.
+- When the image length is not a multiple of 4, the tool adds `0xFF`
+  bytes (erased flash). The `.bin` and `.hex` files include these bytes.
+
+To check a binary image or a flash dump, use `--check`. Set `--base` to
+the application start address:
+
+```sh
+tools/vsl-stamp-image.py --check app.bin --base 0x08002000
+```
+
+### Tests
+
+The tool tests use the Python `unittest` module:
+
+```sh
+python3 -m unittest discover -s tools/tests
+```
+
+The tests that build an ELF image need `arm-none-eabi-gcc`.
+Without them, these tests are skipped.
+
 ## Start the bootloader from the application
 
 An application starts the bootloader with a boot request in the backup
