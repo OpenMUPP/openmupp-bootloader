@@ -144,6 +144,10 @@ foreach(_board IN LISTS VERSALOON_BOOTLOADER_BOARDS)
     target_compile_options(${_target} PRIVATE
         -Wall -Wextra -Wconversion
         $<$<BOOL:${VSL_WERROR}>:-Werror>
+        # Slim LTO objects skip the optimiser at compile time, so warnings
+        # such as -Warray-bounds and -Wmaybe-uninitialized come only at the
+        # link, without these flags. Fat objects give them at compile time.
+        $<$<BOOL:${VSL_LTO}>:-ffat-lto-objects>
         "-ffile-prefix-map=${_dir}=.")
     target_link_libraries(${_target} PRIVATE art-build-config vsl-layout system-stm32)
 
