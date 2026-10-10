@@ -92,6 +92,7 @@ These CMake options change the build:
 | `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
 | `VSL_LTO` | `ON` | Link-time optimisation |
 | `VSL_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
+| `VSL_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images, see [Host tests](#host-tests) |
 
 Without a preset, the default builds all boards:
 
@@ -134,6 +135,17 @@ The `Makefile` writes `build/<board>/versaloon-bootloader-<board>.*`.
 These are the same paths as the CMake presets. Use another `BUILD_ROOT`
 when you build both, for example `make BUILD_ROOT=build-legacy`. To use
 another toolchain prefix, set `CROSS_COMPILE`.
+
+### Host tests
+
+The host unit tests use doctest and the host C++ compiler. The build
+downloads doctest from GitHub. The tests are in `tests/`.
+
+```sh
+cmake --preset host-tests
+cmake --build --preset host-tests
+ctest --preset host-tests
+```
 
 ## Use
 

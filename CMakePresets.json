@@ -19,10 +19,24 @@
       "displayName": "OtherUse",
       "inherits": "base",
       "cacheVariables": { "VERSALOON_BOOTLOADER_BOARDS": "otheruse" }
+    },
+    {
+      "name": "host-tests",
+      "displayName": "Host unit tests",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "VSL_HOST_TESTS": "ON" }
     }
   ],
   "buildPresets": [
     { "name": "mini", "configurePreset": "mini" },
-    { "name": "otheruse", "configurePreset": "otheruse" }
+    { "name": "otheruse", "configurePreset": "otheruse" },
+    { "name": "host-tests", "configurePreset": "host-tests" }
+  ],
+  "testPresets": [
+    {
+      "name": "host-tests",
+      "configurePreset": "host-tests",
+      "output": { "outputOnFailure": true }
+    }
   ]
 }

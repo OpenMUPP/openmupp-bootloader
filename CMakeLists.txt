@@ -1,12 +1,20 @@
 cmake_minimum_required(VERSION 3.21)
 
+# VSL_HOST_TESTS=ON builds the host unit tests with the host compiler,
+# instead of the bootloader images. The preset host-tests sets it.
+option(VSL_HOST_TESTS "Build the host unit tests instead of the bootloader images" OFF)
+
 # Use the toolchain file when the user does not set a toolchain. A parent
 # project that adds this directory with add_subdirectory() sets its own.
-if(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_CROSSCOMPILING)
+if(NOT VSL_HOST_TESTS AND NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_CROSSCOMPILING)
     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/cmake/arm-none-eabi.cmake")
 endif()
 
-project(versaloon-bootloader LANGUAGES C CXX ASM)
+if(VSL_HOST_TESTS)
+    project(versaloon-bootloader LANGUAGES CXX)
+else()
+    project(versaloon-bootloader LANGUAGES C CXX ASM)
+endif()
 
 option(VSL_WERROR "Treat compiler warnings in the bootloader sources as errors" OFF)
 
@@ -30,11 +38,18 @@ add_library(vsl-layout INTERFACE)
 target_compile_definitions(vsl-layout INTERFACE
     VSL_BOOTLOADER_AREA_SIZE=${VERSALOON_BOOTLOADER_AREA_SIZE})
 
+if(VSL_HOST_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+    return()
+endif()
+
 if(NOT CMAKE_CROSSCOMPILING)
     message(FATAL_ERROR
         "The bootloader needs a cross toolchain for the Cortex-M3. Set "
         "CMAKE_TOOLCHAIN_FILE before the first project() call in the "
-        "parent project, for example cmake/arm-none-eabi.cmake.")
+        "parent project, for example cmake/arm-none-eabi.cmake. For the "
+        "host unit tests, set VSL_HOST_TESTS=ON.")
 endif()
 
 # system-stm32 gets its compile flags from the target art-build-config
