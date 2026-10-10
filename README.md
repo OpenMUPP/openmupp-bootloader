@@ -17,12 +17,20 @@ The pull-up pin is high when the USB device is connected.
 
 ## Memory layout
 
-| Area | Start | Size |
+The bootloader is in a rewrite (issue #4). The rewritten bootloader uses
+a smaller area. The old and the new layout are not compatible.
+
+| Area | Old bootloader (`Makefile`) | New bootloader (CMake) |
 |---|---|---|
-| Bootloader | `0x08000000` | 10 KB |
-| Application | `0x08002800` | rest of the flash |
+| Bootloader | `0x08000000`, 10 KB | `0x08000000`, 8 KB |
+| Application | `0x08002800`, rest of the flash | `0x08002000`, rest of the flash |
 
 The layout is the same for all boards.
+
+The CMake build of the new bootloader is not complete yet. It makes an
+empty image (issue #7). Until issue #10 is done, use the old bootloader
+from the `Makefile` on a board. The rest of this README describes the
+old bootloader, except where it names the new one.
 
 The flash size is different on each part. For example, the STM32F103C8
 has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
@@ -31,8 +39,19 @@ NACK (negative acknowledge) for a write or an erase outside the flash.
 
 ## Build
 
+### New bootloader (CMake)
+
 You need CMake 3.21 or later and the Arm GNU toolchain
-(`arm-none-eabi-gcc`).
+(`arm-none-eabi-gcc`, `arm-none-eabi-g++`). The build gets the library
+`system-stm32` from the submodule `dependencies/system-stm32`. Get it
+before the first build:
+
+```sh
+git submodule update --init
+```
+
+`system-stm32` downloads the CMSIS headers from GitHub at configure
+time.
 
 Each board has a CMake preset. To build the bootloader for one board:
 
@@ -52,15 +71,30 @@ The build writes these files to the build directory. A preset uses
 - `versaloon-bootloader-<board>.map`
 
 The build fails when the image is larger than the bootloader area
-(10 KB). In that case the build removes the image files.
+(8 KB). In that case the build removes the image files. The size spike
+(issue #6) gives a margin of about 1 KB. When the image grows above
+7.5 KB, change to the 12 KB area.
 
 The toolchain file `cmake/arm-none-eabi.cmake` finds the compiler in the
 `PATH`. To use another toolchain, set `ARM_GNU_TOOLCHAIN` to the root
 directory of the toolchain. You can set it as a CMake variable
-(`-DARM_GNU_TOOLCHAIN=<dir>`) or as an environment variable.
+(`-DARM_GNU_TOOLCHAIN=<dir>`) or as an environment variable. The
+toolchain file also sets `arm-none-eabi-gcc-ar` and
+`arm-none-eabi-gcc-ranlib`, because the build uses link-time
+optimisation (LTO).
 
-Without a preset, the option `VERSALOON_BOOTLOADER_BOARDS` selects the
-boards. The default builds all boards.
+These CMake options change the build:
+
+| Option | Default | Content |
+|---|---|---|
+| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build. A preset selects one board. |
+| `VERSALOON_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
+| `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
+| `VSL_LTO` | `ON` | Link-time optimisation |
+| `VSL_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
+| `VSL_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images, see [Host tests](#host-tests) |
+
+Without a preset, the default builds all boards:
 
 ```sh
 cmake -S . -B build/all -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
@@ -69,24 +103,28 @@ cmake --build build/all
 
 ### Use in a parent project
 
-A parent project can add this repository with `add_subdirectory()`. The
-parent project sets the toolchain. The targets are
-`versaloon-bootloader-<board>`. Set `VERSALOON_BOOTLOADER_BOARDS` to
-select the boards.
+A parent project (for example versaloon-next-gen) builds this repository
+with `ExternalProject`. Pass `CMAKE_TOOLCHAIN_FILE` and
+`VERSALOON_BOOTLOADER_BOARDS` in `CMAKE_ARGS`. The install step copies
+the `.elf`, `.hex` and `.bin` files of each board to
+`CMAKE_INSTALL_PREFIX`. The same files are in the build directory of the
+external project.
 
-A parent project can also build the repository with `ExternalProject`.
-Pass `CMAKE_TOOLCHAIN_FILE` and `VERSALOON_BOOTLOADER_BOARDS` in
-`CMAKE_ARGS`. The install step copies the `.elf`, `.hex` and `.bin`
-files of each board to `CMAKE_INSTALL_PREFIX`. The same files are in the
-build directory of the external project.
+Pass `VSL_SYSTEM_STM32_DIR` with the `system-stm32` directory of the
+parent project. Then the two projects use the same library commit, and
+the parent does not need the nested submodule. Without it, the parent
+must check out the submodules recursively.
 
-The parent project must set a cross toolchain before its first
-`project()` call. Without one, the configure step stops with an error.
+A parent project can also add this repository with `add_subdirectory()`.
+The parent project must set a cross toolchain with C, C++ and ASM before
+its first `project()` call. This does not work when the parent project
+has a target `system-stm32` or `art-build-config`. Then the configure
+step stops with an error: use `ExternalProject`.
 
-### Makefile
+### Old bootloader (`Makefile`)
 
-The `Makefile` is an alternative build. It makes the same `.hex` and
-`.bin` files as the CMake build. CI builds both and compares the files.
+The `Makefile` builds the old bootloader (C, ST libraries, 10 KB area).
+It stays until issue #10 removes the old sources.
 
 ```sh
 make                 # all boards
@@ -94,7 +132,20 @@ make BOARD=mini      # one board
 ```
 
 The `Makefile` writes `build/<board>/versaloon-bootloader-<board>.*`.
-To use another toolchain prefix, set `CROSS_COMPILE`.
+These are the same paths as the CMake presets. Use another `BUILD_ROOT`
+when you build both, for example `make BUILD_ROOT=build-legacy`. To use
+another toolchain prefix, set `CROSS_COMPILE`.
+
+### Host tests
+
+The host unit tests use doctest and the host C++ compiler. The build
+downloads doctest from GitHub. The tests are in `tests/`.
+
+```sh
+cmake --preset host-tests
+cmake --build --preset host-tests
+ctest --preset host-tests
+```
 
 ## Use
 
@@ -201,7 +252,7 @@ the CRC is not correct. If a separate step is necessary, add
 `--gap-fill 0xff` and run it after `vsl_stamp_image()`. Post-build steps
 run in the order of the calls.
 
-### Tests
+### Tool tests
 
 The tool tests use the Python `unittest` module:
 
