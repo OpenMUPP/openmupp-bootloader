@@ -112,9 +112,10 @@ bootloader starts the application.
 ## Application image header
 
 Each application image has a header with a CRC (cyclic redundancy check).
-The rewritten bootloader starts only an application with a valid header. Thus a
-half-written application does not start. The current bootloader ignores
-the header, so a stamped image also runs behind it.
+The header is for the rewrite of the bootloader (issue #4). The rewritten
+bootloader will start only an application with a valid header (issue
+#10). Thus a half-written application will not start. The current
+bootloader ignores the header, so a stamped image also runs behind it.
 
 The header uses the reserved words of the Cortex-M3 vector table, at the
 start of the application:
@@ -134,7 +135,8 @@ The CRC uses the algorithm of the STM32F1 CRC unit (CRC-32/MPEG-2):
 - No reflection and no final XOR.
 
 The CRC covers the full image. The words at `0x1C` to `0x27` count as
-zero. The test vectors are in `tests/vectors/crc32-stm32.txt`.
+zero. A gap between two sections of the image counts as `0xFF` (erased
+flash), because a debug probe does not write the gaps. The test vectors are in `tests/vectors/crc32-stm32.txt`.
 
 An application is valid when all of these rules are true:
 
@@ -147,11 +149,15 @@ An application is valid when all of these rules are true:
 ### Stamp tool
 
 `tools/vsl-stamp-image.py` adds the header to an ELF image. It needs
-Python 3 and `arm-none-eabi-objcopy`, and no other packages.
+Python 3.7 or later and `arm-none-eabi-objcopy`, and no other packages.
 
 ```sh
-tools/vsl-stamp-image.py app.elf --bin app.bin --hex app.hex
+tools/vsl-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 55296
 ```
+
+The examples use the current layout: the application starts at
+`0x08002800`. The application area of an STM32F103x8 (64 KB flash) is
+55296 bytes (54 KB).
 
 - The tool writes the header into the `.isr_vector` section of the ELF
   file. Thus an image that a debug probe writes also has the header.
@@ -163,12 +169,17 @@ tools/vsl-stamp-image.py app.elf --bin app.bin --hex app.hex
   An image that has a header already gets a new header.
 - When the image length is not a multiple of 4, the tool adds `0xFF`
   bytes (erased flash). The `.bin` and `.hex` files include these bytes.
+- The `.bin` and `.hex` files contain `0xFF` in the gaps between
+  sections, as the CRC does.
+- Without `--max-length`, the tool refuses an image larger than 128 KB.
+  For example, a section in RAM without a load address in flash gives a
+  very large image.
 
 To check a binary image or a flash dump, use `--check`. Set `--base` to
 the application start address:
 
 ```sh
-tools/vsl-stamp-image.py --check app.bin --base 0x08002000
+tools/vsl-stamp-image.py --check app.bin --base 0x08002800
 ```
 
 ### CMake
@@ -177,12 +188,17 @@ A CMake project adds the header with a post-build step:
 
 ```cmake
 include(<versaloon-bootloader>/cmake/VslStampImage.cmake)
-vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 53248)
+vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 55296)
 ```
 
-`BIN`, `HEX` and `MAX_LENGTH` are optional. Post-build steps run in the
-order of the calls. Call `vsl_stamp_image()` before other post-build steps
-that read the ELF file.
+`BIN`, `HEX` and `MAX_LENGTH` are optional.
+
+Use the `BIN` and `HEX` files of `vsl_stamp_image()` to program the
+application. Do not make the `.bin` or `.hex` file with an own `objcopy`
+step. `objcopy -O binary` fills the gaps between sections with `0x00`, so
+the CRC is not correct. If an own step is necessary, add
+`--gap-fill 0xff` and run it after `vsl_stamp_image()`. Post-build steps
+run in the order of the calls.
 
 ### Tests
 

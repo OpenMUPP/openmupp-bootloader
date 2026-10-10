@@ -8,11 +8,13 @@
 # image as a binary file and an Intel HEX file. MAX_LENGTH is the size of the
 # application area: the build fails when the image is larger.
 #
-# Post-build steps run in the order of the calls. Call vsl_stamp_image()
-# before other post-build steps that read the ELF file, for example an
-# objcopy step, so these steps see the stamped image.
+# Program the BIN or HEX files of this step. Their gaps between the
+# sections are 0xFF, as the CRC expects. An own "objcopy -O binary" step
+# fills the gaps with 0x00, which gives a wrong CRC. An own step needs
+# --gap-fill 0xff and must come after vsl_stamp_image(): post-build steps
+# run in the order of the calls.
 #
-# The step needs Python 3 and CMAKE_OBJCOPY.
+# The step needs Python 3.7 and CMAKE_OBJCOPY.
 
 set(_VSL_STAMP_IMAGE_TOOL "${CMAKE_CURRENT_LIST_DIR}/../tools/vsl-stamp-image.py")
 
@@ -24,7 +26,7 @@ function(vsl_stamp_image target)
     if(NOT CMAKE_OBJCOPY)
         message(FATAL_ERROR "vsl_stamp_image: CMAKE_OBJCOPY is not set")
     endif()
-    find_package(Python3 3.6 REQUIRED COMPONENTS Interpreter)
+    find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
 
     get_filename_component(_tool "${_VSL_STAMP_IMAGE_TOOL}" ABSOLUTE)
     set(_options --objcopy "${CMAKE_OBJCOPY}")
