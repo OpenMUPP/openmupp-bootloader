@@ -171,6 +171,19 @@ the application start address:
 tools/vsl-stamp-image.py --check app.bin --base 0x08002000
 ```
 
+### CMake
+
+A CMake project adds the header with a post-build step:
+
+```cmake
+include(<versaloon-bootloader>/cmake/VslStampImage.cmake)
+vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 53248)
+```
+
+`BIN`, `HEX` and `MAX_LENGTH` are optional. Post-build steps run in the
+order of the calls. Call `vsl_stamp_image()` before other post-build steps
+that read the ELF file.
+
 ### Tests
 
 The tool tests use the Python `unittest` module:
@@ -179,7 +192,7 @@ The tool tests use the Python `unittest` module:
 python3 -m unittest discover -s tools/tests
 ```
 
-The tests that build an ELF image need `arm-none-eabi-gcc`.
+The tests that build an ELF image need `arm-none-eabi-gcc` and `cmake`.
 Without them, these tests are skipped.
 
 ## Start the bootloader from the application

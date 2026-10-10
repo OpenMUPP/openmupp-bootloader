@@ -3,8 +3,8 @@
 Run from the repository root:
     python3 -m unittest discover -s tools/tests
 
-The ELF tests need arm-none-eabi-gcc and arm-none-eabi-objcopy in the PATH.
-Without them, these tests are skipped.
+The ELF tests need arm-none-eabi-gcc and arm-none-eabi-objcopy in the PATH,
+the CMake test also needs cmake. Without them, these tests are skipped.
 """
 
 import importlib.util
@@ -195,6 +195,7 @@ class CheckTest(unittest.TestCase):
 
 
 PROJECT = os.path.join(ROOT, "tools", "tests", "stamp-project")
+CMAKE = shutil.which("cmake")
 
 
 @unittest.skipUnless(GCC and OBJCOPY, "arm-none-eabi-gcc and arm-none-eabi-objcopy not found")
@@ -261,6 +262,24 @@ class ElfTest(unittest.TestCase):
         before = self.objcopy_bin(self.elf)
         self.assertEqual(self.run_tool("--max-length", "64"), 1)
         self.assertEqual(self.objcopy_bin(self.elf), before)
+
+
+@unittest.skipUnless(GCC and OBJCOPY and CMAKE, "cmake or the Arm GNU toolchain not found")
+class CmakeTest(unittest.TestCase):
+    def test_vsl_stamp_image(self):
+        with tempfile.TemporaryDirectory() as build:
+            subprocess.run([CMAKE, "-S", PROJECT, "-B", build], check=True,
+                           stdout=subprocess.DEVNULL)
+            subprocess.run([CMAKE, "--build", build], check=True, stdout=subprocess.DEVNULL)
+            with open(os.path.join(build, "app.bin"), "rb") as f:
+                stamped = f.read()
+            self.assertEqual(tool.check(stamped, BASE, 52 * 1024), [])
+            self.assertTrue(os.path.exists(os.path.join(build, "app.hex")))
+            elf_bin = os.path.join(build, "elf.bin")
+            subprocess.run([OBJCOPY, "-O", "binary", os.path.join(build, "app.elf"), elf_bin],
+                           check=True)
+            with open(elf_bin, "rb") as f:
+                self.assertEqual(f.read(), stamped)
 
 
 if __name__ == "__main__":
