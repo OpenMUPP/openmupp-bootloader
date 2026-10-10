@@ -1,5 +1,6 @@
 stages:
   - build
+  - test
 
 image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 
@@ -40,3 +41,13 @@ build:
       - build/${BOARD}/*.bin
       - build/${BOARD}/*.map
     expire_in: 1 month
+
+# Tests of the image stamp tool (tools/vsl-stamp-image.py) and of
+# cmake/VslStampImage.cmake.
+test-tools:
+  stage: test
+  needs: []
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - export PATH="${GCC_TOOLCHAIN_PREFIX}/bin:$PATH"
+    - python3 -m unittest discover -v -s tools/tests
