@@ -228,7 +228,10 @@ void setHalt(uint8_t address, bool halt) {
       return;
    }
    const uint16_t dtog = in ? dtogTx : dtogRx;
-   const uint16_t resume = in ? (txBusy ? USB_EP_TX_VALID : USB_EP_TX_NAK) : (rxFull ? USB_EP_RX_NAK : USB_EP_RX_VALID);
+   // EP1 (notification) never sends, so it resumes as NAK. The queue state
+   // belongs to EP2.
+   const uint16_t resume = in ? (ep == 2 && txBusy ? USB_EP_TX_VALID : USB_EP_TX_NAK)
+                              : (rxFull ? USB_EP_RX_NAK : USB_EP_RX_VALID);
    const uint16_t reg = epr(ep);
    epr(ep) = static_cast<uint16_t>(((reg & (epKeep | dtog | mask)) ^ resume) | USB_EP_CTR_RX | USB_EP_CTR_TX);
 }
@@ -497,7 +500,7 @@ void poll() {
                ep0Out();
             }
          }
-      } else {
+      } else if(ep == 2) {
          if(reg & USB_EP_CTR_TX) {
             clearCtr(ep, USB_EP_CTR_TX);
             txBusy = false;
@@ -514,6 +517,10 @@ void poll() {
                setStat(2, statRx, USB_EP_RX_VALID);
             }
          }
+      } else {
+         // EP1: a transfer that the driver did not start. Clear the flags,
+         // or the CTR loop does not end.
+         clearCtr(ep, static_cast<uint16_t>(reg & (USB_EP_CTR_TX | USB_EP_CTR_RX)));
       }
    }
    sendNextPacket();
