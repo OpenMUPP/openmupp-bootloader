@@ -5,6 +5,8 @@ stages:
 image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 
 variables:
+  GIT_SUBMODULE_STRATEGY: normal
+  GIT_SUBMODULE_FORCE_HTTPS: "true"
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
 
 # Build on:
@@ -19,8 +21,9 @@ workflow:
       when: never
     - if: "$CI_COMMIT_BRANCH"
 
-# The build fails when an image is larger than the bootloader area (10 KB).
-# The linker script and a size check after the link both enforce the limit.
+# The new bootloader (CMake). The build fails when an image is larger than
+# the bootloader area (8 KB): the linker script and a size check after the
+# link both enforce the limit.
 build:
   stage: build
   parallel:
@@ -28,12 +31,8 @@ build:
       - BOARD: [mini, otheruse]
   script:
     - cd "$CI_PROJECT_DIR"
-    - cmake --preset ${BOARD} -DARM_GNU_TOOLCHAIN=${GCC_TOOLCHAIN_PREFIX}
+    - cmake --preset ${BOARD} -DARM_GNU_TOOLCHAIN=${GCC_TOOLCHAIN_PREFIX} -DVSL_WERROR=ON
     - cmake --build --preset ${BOARD} -j`nproc`
-    # The Makefile build is the reference: the images must be the same.
-    - make -j`nproc` BOARD=${BOARD} BUILD_ROOT=build-make CROSS_COMPILE=${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-
-    - cmp build/${BOARD}/versaloon-bootloader-${BOARD}.bin build-make/${BOARD}/versaloon-bootloader-${BOARD}.bin
-    - cmp build/${BOARD}/versaloon-bootloader-${BOARD}.hex build-make/${BOARD}/versaloon-bootloader-${BOARD}.hex
   artifacts:
     paths:
       - build/${BOARD}/*.elf
@@ -41,6 +40,35 @@ build:
       - build/${BOARD}/*.bin
       - build/${BOARD}/*.map
     expire_in: 1 month
+
+# The old bootloader (Makefile, 10 KB area). It stays until #10 removes the
+# old sources.
+build-legacy:
+  stage: build
+  needs: []
+  parallel:
+    matrix:
+      - BOARD: [mini, otheruse]
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - make -j`nproc` BOARD=${BOARD} BUILD_ROOT=build-legacy CROSS_COMPILE=${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-
+  artifacts:
+    paths:
+      - build-legacy/${BOARD}/*.elf
+      - build-legacy/${BOARD}/*.hex
+      - build-legacy/${BOARD}/*.bin
+      - build-legacy/${BOARD}/*.map
+    expire_in: 1 month
+
+# Host unit tests (doctest), with the host compiler.
+test-host:
+  stage: test
+  needs: []
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - cmake --preset host-tests -DVSL_WERROR=ON
+    - cmake --build --preset host-tests -j`nproc`
+    - ctest --preset host-tests
 
 # Tests of the image stamp tool (tools/vsl-stamp-image.py) and of
 # cmake/VslStampImage.cmake.
@@ -51,23 +79,3 @@ test-tools:
     - cd "$CI_PROJECT_DIR"
     - export PATH="${GCC_TOOLCHAIN_PREFIX}/bin:$PATH"
     - python3 -m unittest discover -v -s tools/tests
-
-# Compile check of the USB driver of the rewrite (src/usb). The old build
-# does not compile it. It needs only the CMSIS headers of the STM32F1; the
-# job gets them from ST, at the versions that system-stm32 uses. #7 adds
-# the driver to the new build and removes this job.
-compile-usb-driver:
-  stage: build
-  needs: []
-  script:
-    - cd "$CI_PROJECT_DIR"
-    - git clone --quiet --depth 1 --branch v4.3.5 https://github.com/STMicroelectronics/cmsis_device_f1.git /tmp/cmsis_device_f1
-    - git clone --quiet --depth 1 --branch v5.4.0_cm3 https://github.com/STMicroelectronics/cmsis_core.git /tmp/cmsis_core
-    # system-stm32 gives cmsis_device.h; for the STM32F1 it includes stm32f1xx.h.
-    - mkdir -p /tmp/cmsis_shim && printf '#include <stm32f1xx.h>\n' > /tmp/cmsis_shim/cmsis_device.h
-    - >-
-      ${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-g++ -std=gnu++23 -mcpu=cortex-m3 -mthumb -Os
-      -Wall -Wextra -Wconversion -Werror -fno-exceptions -fno-rtti -DSTM32F1 -DSTM32F103xB
-      -I/tmp/cmsis_shim -I/tmp/cmsis_device_f1/Include -I/tmp/cmsis_core/Include
-      -c src/usb/UsbCdc.cpp -o /tmp/UsbCdc.o
-    - ${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-size /tmp/UsbCdc.o
