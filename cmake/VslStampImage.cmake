@@ -9,8 +9,8 @@
 # application area: the build fails when the image is larger.
 #
 # Program the BIN or HEX files of this step. Their gaps between the
-# sections are 0xFF, as the CRC expects. An own "objcopy -O binary" step
-# fills the gaps with 0x00, which gives a wrong CRC. An own step needs
+# sections are 0xFF, as the CRC expects. A separate "objcopy -O binary" step
+# fills the gaps with 0x00, which gives a wrong CRC. A separate step needs
 # --gap-fill 0xff and must come after vsl_stamp_image(): post-build steps
 # run in the order of the calls.
 #

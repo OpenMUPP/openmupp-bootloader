@@ -136,7 +136,8 @@ The CRC uses the algorithm of the STM32F1 CRC unit (CRC-32/MPEG-2):
 
 The CRC covers the full image. The words at `0x1C` to `0x27` count as
 zero. A gap between two sections of the image counts as `0xFF` (erased
-flash), because a debug probe does not write the gaps. The test vectors are in `tests/vectors/crc32-stm32.txt`.
+flash), because a debug probe does not write the gaps. The test vectors
+are in `tests/vectors/crc32-stm32.txt`.
 
 An application is valid when all of these rules are true:
 
@@ -194,9 +195,9 @@ vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 55296)
 `BIN`, `HEX` and `MAX_LENGTH` are optional.
 
 Use the `BIN` and `HEX` files of `vsl_stamp_image()` to program the
-application. Do not make the `.bin` or `.hex` file with an own `objcopy`
+application. Do not make the `.bin` or `.hex` file with a separate `objcopy`
 step. `objcopy -O binary` fills the gaps between sections with `0x00`, so
-the CRC is not correct. If an own step is necessary, add
+the CRC is not correct. If a separate step is necessary, add
 `--gap-fill 0xff` and run it after `vsl_stamp_image()`. Post-build steps
 run in the order of the calls.
 
