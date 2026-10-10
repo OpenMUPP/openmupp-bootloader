@@ -121,8 +121,9 @@ configure_file("${_dir}/ld/sections.ld" "${_ld_dir}/sections.ld" COPYONLY)
 
 set(_sources
     "${_dir}/src/main.cpp"
-    # The USB driver for #10. The empty image does not use it yet; the
-    # build compiles it, so CI checks it.
+    # The USB driver and the AN3155 protocol for #10. The empty image does
+    # not use them yet; the build compiles them, so CI checks them.
+    "${_dir}/src/protocol/An3155Protocol.cpp"
     "${_dir}/src/usb/UsbCdc.cpp")
 
 foreach(_board IN LISTS VERSALOON_BOOTLOADER_BOARDS)
