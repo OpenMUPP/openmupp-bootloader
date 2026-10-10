@@ -19,6 +19,18 @@
 //      usbcdc::write(buffer, n);
 //   }
 //
+// Timing: the device answers only when poll() runs. Call poll() at least
+// every 1 ms in normal operation. The longest gap between two poll() calls
+// must stay below 10 ms (RM0008 23.4.2: EP0 must work 10 ms after a bus
+// reset) except for one flash page erase (20-40 ms; the CPU stalls on the
+// flash). Erase several pages one page at a time, with poll() between the
+// pages. A SETUP that comes during a gap waits in the hardware; the USB 2.0
+// control request time limits (50 ms, 500 ms) allow one page erase.
+//
+// Known deviations: the device is bus-powered (100 mA) but it does not go
+// into low-power mode on a suspend. It ignores the suspend, as a
+// bootloader that the host uses actively. No remote wakeup.
+//
 // Status: compile-tested and size-measured (3.2 KB image with start-up,
 // LTO). Not yet tested on a board; #10 integrates it and #11 tests it.
 //

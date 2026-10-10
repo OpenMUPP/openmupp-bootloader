@@ -14,7 +14,9 @@ constexpr uint16_t productId = 0x5740;
 
 const uint8_t deviceDescriptor[18] = {
    18, 1, 0x00, 0x02,      // bLength, DEVICE, bcdUSB 2.00
-   0x02, 0x00, 0x00, 64,   // class CDC, subclass, protocol, bMaxPacketSize0
+   // Class CDC, subclass ACM: Windows binds its inbox usbser.sys driver to
+   // the compatible ID USB\Class_02&SubClass_02 without an INF file.
+   0x02, 0x02, 0x00, 64,   // class, subclass, protocol, bMaxPacketSize0
    vendorId & 0xFF, vendorId >> 8, productId & 0xFF, productId >> 8,
    0x00, 0x02,             // bcdDevice 2.00
    1, 2, 3, 1,             // iManufacturer, iProduct, iSerialNumber, bNumConfigurations
@@ -182,19 +184,61 @@ void ep0Stall() {
    setStat(0, statTx | statRx, USB_EP_TX_STALL | USB_EP_RX_VALID);
 }
 
-void closeDataEndpoints() {
-   for(uint8_t ep = 1; ep <= 2; ++ep) {
-      openEndpoint(ep, ep == 1 ? USB_EP_INTERRUPT : USB_EP_BULK, 0); // DISABLED
-   }
+// Drops the queued and received data. A packet in flight is lost.
+void resetDataState() {
    txBusy = false;
    txLength = 0;
    txZlp = false;
    rxFull = false;
 }
 
+void closeDataEndpoints() {
+   for(uint8_t ep = 1; ep <= 2; ++ep) {
+      openEndpoint(ep, ep == 1 ? USB_EP_INTERRUPT : USB_EP_BULK, 0); // DISABLED
+   }
+   resetDataState();
+}
+
+// Also for SET_CONFIGURATION(1) when the device is configured already: the
+// endpoints restart with DATA0 and empty queues (USB 2.0 9.4.7).
 void openDataEndpoints() {
+   resetDataState();
    openEndpoint(1, USB_EP_INTERRUPT, USB_EP_TX_NAK);
    openEndpoint(2, USB_EP_BULK, USB_EP_TX_NAK | USB_EP_RX_VALID);
+}
+
+// True for the endpoint addresses of the configuration: 0x81, 0x02, 0x82.
+// withEp0 also accepts 0x00 and 0x80.
+bool isEndpoint(uint16_t address, bool withEp0) {
+   if(address == 0x00 || address == 0x80) {
+      return withEp0;
+   }
+   return configuration && (address == 0x81 || address == 0x02 || address == 0x82);
+}
+
+// Sets the halt state of a data endpoint. Clearing the halt also resets the
+// data toggle (USB 2.0 9.4.5) and resumes the endpoint in the state of the
+// driver queue.
+void setHalt(uint8_t address, bool halt) {
+   const uint8_t ep = address & 0x0F;
+   const bool in = address & 0x80;
+   const uint16_t mask = in ? statTx : statRx;
+   if(halt) {
+      setStat(ep, mask, in ? USB_EP_TX_STALL : USB_EP_RX_STALL);
+      return;
+   }
+   const uint16_t dtog = in ? dtogTx : dtogRx;
+   const uint16_t resume = in ? (txBusy ? USB_EP_TX_VALID : USB_EP_TX_NAK) : (rxFull ? USB_EP_RX_NAK : USB_EP_RX_VALID);
+   const uint16_t reg = epr(ep);
+   epr(ep) = static_cast<uint16_t>(((reg & (epKeep | dtog | mask)) ^ resume) | USB_EP_CTR_RX | USB_EP_CTR_TX);
+}
+
+bool isHalted(uint8_t address) {
+   const uint8_t ep = address & 0x0F;
+   if(ep == 0) {
+      return false;
+   }
+   return address & 0x80 ? (epr(ep) & statTx) == USB_EP_TX_STALL : (epr(ep) & statRx) == USB_EP_RX_STALL;
 }
 
 const uint8_t *stringDescriptor(uint8_t index) {
@@ -248,44 +292,49 @@ bool standardRequest(const Setup &s) {
       replyBuffer[0] = 0;
       replyBuffer[1] = 0;
       if(recipient == 2) {
-         const uint8_t ep = s.wIndex & 0x0F;
-         const uint16_t stat = ep == 0 ? 0 : (s.wIndex & 0x80 ? epr(ep) & statTx : epr(ep) & statRx);
-         replyBuffer[0] = stat == USB_EP_TX_STALL || stat == USB_EP_RX_STALL;
+         if(!isEndpoint(s.wIndex, true)) {
+            return false;
+         }
+         replyBuffer[0] = isHalted(static_cast<uint8_t>(s.wIndex));
+      } else if(recipient == 1 ? !configuration || s.wIndex > 1 : recipient != 0) {
+         return false;
       }
       ep0Reply(replyBuffer, 2, s.wLength);
       return true;
    case 0x01: // CLEAR_FEATURE
    case 0x03: // SET_FEATURE
-      if(recipient == 2 && s.wValue == 0 && (s.wIndex & 0x0F) != 0 && configuration) {
-         // ENDPOINT_HALT on a data endpoint
-         const uint8_t ep = s.wIndex & 0x0F;
-         const bool in = s.wIndex & 0x80;
-         const uint16_t mask = in ? statTx : statRx;
-         if(s.bRequest == 0x03) {
-            setStat(ep, mask, in ? USB_EP_TX_STALL : USB_EP_RX_STALL);
-         } else {
-            // Clear the halt: reset the data toggle and resume.
-            const uint16_t reg = epr(ep);
-            const uint16_t dtog = in ? dtogTx : dtogRx;
-            const uint16_t resume = in ? (txBusy ? USB_EP_TX_VALID : USB_EP_TX_NAK)
-                                       : (rxFull ? USB_EP_RX_NAK : USB_EP_RX_VALID);
-            epr(ep) = static_cast<uint16_t>(((reg & (epKeep | dtog | mask)) ^ resume) | USB_EP_CTR_RX | USB_EP_CTR_TX);
+      if(recipient == 2 && s.wValue == 0) {
+         // ENDPOINT_HALT. EP0 does not halt: a STALL on EP0 ends with the
+         // next SETUP.
+         if(!isEndpoint(s.wIndex, true)) {
+            return false;
+         }
+         if(s.wIndex & 0x0F) {
+            setHalt(static_cast<uint8_t>(s.wIndex), s.bRequest == 0x03);
          }
          ep0Status();
          return true;
       }
-      if(recipient == 0) {
-         ep0Status(); // DEVICE_REMOTE_WAKEUP: not supported, ignored
-         return true;
-      }
+      // DEVICE_REMOTE_WAKEUP and TEST_MODE are not supported.
       return false;
    case 0x0A: // GET_INTERFACE
+      if(!configuration || s.wIndex > 1) {
+         return false;
+      }
       replyBuffer[0] = 0;
       ep0Reply(replyBuffer, 1, s.wLength);
       return true;
    case 0x0B: // SET_INTERFACE
-      if(s.wValue != 0) {
+      if(!configuration || s.wIndex > 1 || s.wValue != 0) {
          return false;
+      }
+      // Alternate setting 0 again: the endpoints of the interface restart
+      // with DATA0 (USB 2.0 9.1.1.5).
+      if(s.wIndex == 0) {
+         setHalt(0x81, false);
+      } else {
+         setHalt(0x02, false);
+         setHalt(0x82, false);
       }
       ep0Status();
       return true;
@@ -314,9 +363,13 @@ bool classRequest(const Setup &s) {
    }
 }
 
+// The EP0 OUT or SETUP packet, copied from the PMA before CTR_RX is
+// cleared: the hardware accepts a new SETUP into the buffer after the clear.
+uint8_t ep0Packet[8];
+uint16_t ep0PacketLength;
+
 void ep0Setup() {
-   uint8_t raw[8];
-   pmaRead(ep0Rx, raw, sizeof raw);
+   const uint8_t *raw = ep0Packet;
    const Setup s{ raw[0], raw[1], static_cast<uint16_t>(raw[2] | raw[3] << 8),
                   static_cast<uint16_t>(raw[4] | raw[5] << 8), static_cast<uint16_t>(raw[6] | raw[7] << 8) };
    ctrlLeft = 0;
@@ -334,8 +387,8 @@ void ep0Setup() {
 void ep0Out() {
    if(ctrlReceive) {
       ctrlReceive = false;
-      if((bdt(0, countRx) & 0x3FF) == sizeof lineCoding) {
-         pmaRead(ep0Rx, lineCoding, sizeof lineCoding);
+      if(ep0PacketLength == sizeof lineCoding) {
+         std::memcpy(lineCoding, ep0Packet, sizeof lineCoding);
       }
       ep0Status();
    }
@@ -435,6 +488,8 @@ void poll() {
             ep0In();
          }
          if(reg & USB_EP_CTR_RX) {
+            ep0PacketLength = static_cast<uint16_t>(bdt(0, countRx) & 0x3FF);
+            pmaRead(ep0Rx, ep0Packet, ep0PacketLength < sizeof ep0Packet ? ep0PacketLength : sizeof ep0Packet);
             clearCtr(0, USB_EP_CTR_RX);
             if(reg & USB_EP_SETUP) {
                ep0Setup();
@@ -448,10 +503,10 @@ void poll() {
             txBusy = false;
          }
          if(reg & USB_EP_CTR_RX) {
-            clearCtr(ep, USB_EP_CTR_RX);
             // The hardware sets the endpoint to NAK; read() re-arms it.
             rxLength = static_cast<uint8_t>(bdt(2, countRx) & 0x3FF);
             pmaRead(ep2Rx, rxPacket, rxLength);
+            clearCtr(ep, USB_EP_CTR_RX);
             rxOffset = 0;
             rxFull = true;
             if(rxLength == 0) {
@@ -476,7 +531,10 @@ std::size_t read(uint8_t *data, std::size_t size) {
    rxOffset = static_cast<uint8_t>(rxOffset + n);
    if(rxOffset == rxLength) {
       rxFull = false;
-      setStat(2, statRx, USB_EP_RX_VALID);
+      // Re-arm only from NAK: keep a halt (STALL) of the host.
+      if((epr(2) & statRx) == USB_EP_RX_NAK) {
+         setStat(2, statRx, USB_EP_RX_VALID);
+      }
    }
    return n;
 }
