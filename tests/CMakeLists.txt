@@ -13,8 +13,10 @@ FetchContent_MakeAvailable(doctest)
 
 add_executable(vsl-bootloader-tests
         main.cpp
+        TestAn3155Protocol.cpp
         TestLayout.cpp
-        TestMemoryMap.cpp)
+        TestMemoryMap.cpp
+        "${PROJECT_SOURCE_DIR}/src/protocol/An3155Protocol.cpp")
 set_target_properties(vsl-bootloader-tests PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON)
