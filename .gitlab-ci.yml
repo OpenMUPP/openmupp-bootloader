@@ -7,6 +7,8 @@ image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 variables:
   GIT_SUBMODULE_STRATEGY: normal
   GIT_SUBMODULE_FORCE_HTTPS: "true"
+  # system-stm32 gets its version from "git describe" and needs the tags.
+  GIT_DEPTH: 0
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
 
 # Build on:
