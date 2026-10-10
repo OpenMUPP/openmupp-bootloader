@@ -8,7 +8,9 @@ variables:
   GIT_SUBMODULE_STRATEGY: normal
   GIT_SUBMODULE_FORCE_HTTPS: "true"
   # system-stm32 gets its version from "git describe" and needs the tags.
+  # A full clone each time: a fetch reuses an old shallow submodule clone.
   GIT_DEPTH: 0
+  GIT_STRATEGY: clone
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
 
 # Build on:
