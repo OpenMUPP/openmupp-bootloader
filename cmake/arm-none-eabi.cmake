@@ -18,7 +18,14 @@ else()
 endif()
 
 set(CMAKE_C_COMPILER   "${_tool_prefix}gcc")
+set(CMAKE_CXX_COMPILER "${_tool_prefix}g++")
 set(CMAKE_ASM_COMPILER "${_tool_prefix}gcc")
+
+# Static libraries with LTO objects need the archiver with the LTO plugin.
+# The plain ar and ranlib make an archive without a symbol index for these
+# objects, and the link does not find the symbols.
+set(CMAKE_AR     "${_tool_prefix}gcc-ar"     CACHE FILEPATH "Archiver with the LTO plugin")
+set(CMAKE_RANLIB "${_tool_prefix}gcc-ranlib" CACHE FILEPATH "ranlib with the LTO plugin")
 
 # Do not link a test program: the linker scripts need the project memory map.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
