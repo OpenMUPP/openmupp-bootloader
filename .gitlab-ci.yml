@@ -51,3 +51,23 @@ test-tools:
     - cd "$CI_PROJECT_DIR"
     - export PATH="${GCC_TOOLCHAIN_PREFIX}/bin:$PATH"
     - python3 -m unittest discover -v -s tools/tests
+
+# Compile check of the USB driver of the rewrite (src/usb). The old build
+# does not compile it. It needs only the CMSIS headers of the STM32F1; the
+# job gets them from ST, at the versions that system-stm32 uses. #7 adds
+# the driver to the new build and removes this job.
+compile-usb-driver:
+  stage: build
+  needs: []
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - git clone --quiet --depth 1 --branch v4.3.5 https://github.com/STMicroelectronics/cmsis_device_f1.git /tmp/cmsis_device_f1
+    - git clone --quiet --depth 1 --branch v5.4.0_cm3 https://github.com/STMicroelectronics/cmsis_core.git /tmp/cmsis_core
+    # system-stm32 gives cmsis_device.h; for the STM32F1 it includes stm32f1xx.h.
+    - mkdir -p /tmp/cmsis_shim && printf '#include <stm32f1xx.h>\n' > /tmp/cmsis_shim/cmsis_device.h
+    - >-
+      ${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-g++ -std=gnu++23 -mcpu=cortex-m3 -mthumb -Os
+      -Wall -Wextra -Wconversion -Werror -fno-exceptions -fno-rtti -DSTM32F1 -DSTM32F103xB
+      -I/tmp/cmsis_shim -I/tmp/cmsis_device_f1/Include -I/tmp/cmsis_core/Include
+      -c src/usb/UsbCdc.cpp -o /tmp/UsbCdc.o
+    - ${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-size /tmp/UsbCdc.o
