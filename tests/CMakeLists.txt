@@ -13,11 +13,12 @@ FetchContent_MakeAvailable(doctest)
 
 add_executable(vsl-bootloader-tests
         main.cpp
-        TestLayout.cpp)
+        TestLayout.cpp
+        TestMemoryMap.cpp)
 set_target_properties(vsl-bootloader-tests PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON)
-target_include_directories(vsl-bootloader-tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_include_directories(vsl-bootloader-tests PRIVATE "${PROJECT_SOURCE_DIR}/src" .)
 target_compile_options(vsl-bootloader-tests PRIVATE -Wall -Wextra -Wconversion
         $<$<BOOL:${VSL_WERROR}>:-Werror>)
 target_link_libraries(vsl-bootloader-tests PRIVATE vsl-layout doctest::doctest)
