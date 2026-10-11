@@ -143,8 +143,9 @@ else()
             -Wall -Wextra -Wconversion
             $<$<BOOL:${VSL_WERROR}>:-Werror>
             # Slim LTO objects skip the optimiser at compile time, so warnings
-            # such as -Warray-bounds and -Wmaybe-uninitialized come only at the
-            # link, without these flags. Fat objects give them at compile time.
+            # such as -Warray-bounds and -Wmaybe-uninitialized do not come at
+            # all: the link does not give them for these flags either. Fat
+            # objects give them at compile time.
             $<$<BOOL:${VSL_LTO}>:-ffat-lto-objects>
             "-ffile-prefix-map=${CMAKE_CURRENT_LIST_DIR}=.")
         target_link_libraries(${_target} PRIVATE art-build-config vsl-layout system-stm32)
