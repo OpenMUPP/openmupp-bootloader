@@ -20,17 +20,16 @@ The pull-up pin is high when the USB device is connected.
 The bootloader is in a rewrite (issue #4). The rewritten bootloader uses
 a smaller area. The old and the new layout are not compatible.
 
-| Area | Old bootloader (`Makefile`) | New bootloader (CMake) |
+| Area | Legacy bootloader | New bootloader (CMake) |
 |---|---|---|
 | Bootloader | `0x08000000`, 10 KB | `0x08000000`, 8 KB |
 | Application | `0x08002800`, rest of the flash | `0x08002000`, rest of the flash |
 
 The layout is the same for all boards.
 
-The CMake build of the new bootloader is not complete yet. It makes an
-empty image (issue #7). Until issue #10 is done, use the old bootloader
-from the `Makefile` on a board. The rest of this README describes the
-old bootloader, except where it names the new one.
+The CMake build of the new bootloader is in progress (issue #7). It makes an
+empty image. The rest of this README describes the legacy bootloader, except
+where it names the new one.
 
 The flash size is different on each part. For example, the STM32F103C8
 has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
@@ -120,21 +119,6 @@ The parent project must set a cross toolchain with C, C++ and ASM before
 its first `project()` call. This does not work when the parent project
 has a target `system-stm32` or `art-build-config`. Then the configure
 step stops with an error: use `ExternalProject`.
-
-### Old bootloader (`Makefile`)
-
-The `Makefile` builds the old bootloader (C, ST libraries, 10 KB area).
-It stays until issue #10 removes the old sources.
-
-```sh
-make                 # all boards
-make BOARD=mini      # one board
-```
-
-The `Makefile` writes `build/<board>/versaloon-bootloader-<board>.*`.
-These are the same paths as the CMake presets. Use another `BUILD_ROOT`
-when you build both, for example `make BUILD_ROOT=build-legacy`. To use
-another toolchain prefix, set `CROSS_COMPILE`.
 
 ### Host tests
 

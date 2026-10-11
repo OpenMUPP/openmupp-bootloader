@@ -45,25 +45,6 @@ build:
       - build/${BOARD}/*.map
     expire_in: 1 month
 
-# The old bootloader (Makefile, 10 KB area). It stays until #10 removes the
-# old sources.
-build-legacy:
-  stage: build
-  needs: []
-  parallel:
-    matrix:
-      - BOARD: [mini, otheruse]
-  script:
-    - cd "$CI_PROJECT_DIR"
-    - make -j`nproc` BOARD=${BOARD} BUILD_ROOT=build-legacy CROSS_COMPILE=${GCC_TOOLCHAIN_PREFIX}/bin/arm-none-eabi-
-  artifacts:
-    paths:
-      - build-legacy/${BOARD}/*.elf
-      - build-legacy/${BOARD}/*.hex
-      - build-legacy/${BOARD}/*.bin
-      - build-legacy/${BOARD}/*.map
-    expire_in: 1 month
-
 # Host unit tests (doctest), with the host compiler.
 test-host:
   stage: test
