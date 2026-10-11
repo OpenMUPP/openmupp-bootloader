@@ -77,11 +77,17 @@ constexpr uint8_t readoutUnprotect = 0x92;
 } // namespace command
 
 // The commands in the reply to Get, in this order.
-constexpr uint8_t supportedCommands[] = {
-   command::get,         command::getVersion,   command::getId,
-   command::readMemory,  command::go,           command::writeMemory,
-   command::extendedErase, command::writeProtect, command::writeUnprotect,
-   command::readoutProtect, command::readoutUnprotect};
+constexpr uint8_t supportedCommands[] = { command::get,
+                                          command::getVersion,
+                                          command::getId,
+                                          command::readMemory,
+                                          command::go,
+                                          command::writeMemory,
+                                          command::extendedErase,
+                                          command::writeProtect,
+                                          command::writeUnprotect,
+                                          command::readoutProtect,
+                                          command::readoutUnprotect };
 
 struct Hardware {
    FlashTarget &flash;
@@ -92,7 +98,7 @@ struct Hardware {
 };
 
 class An3155Protocol {
-public:
+   public:
    static constexpr uint32_t timeoutMs = 1000;
    static constexpr std::size_t maxReadSize = 256;
    static constexpr std::size_t maxWriteSize = 256;
@@ -116,25 +122,33 @@ public:
    void poll();
 
    // The reply bytes that wait for sending.
-   std::span<const uint8_t> output() const { return {output_, outputSize_}; }
+   std::span<const uint8_t> output() const {
+      return { output_, outputSize_ };
+   }
 
    // Removes the first count bytes of output(), after they were sent.
    void consumeOutput(std::size_t count);
 
    // The action to do now. It is none while reply bytes wait for sending.
    // After an action other than none, the protocol takes no more bytes.
-   Action action() const { return outputSize_ == 0 ? action_ : Action::none; }
+   Action action() const {
+      return outputSize_ == 0 ? action_ : Action::none;
+   }
 
    // Discards the command in progress, the reply and the action.
    void reset();
 
    // True while a flash or option byte operation runs in poll().
-   bool busy() const { return state_ == State::busy; }
+   bool busy() const {
+      return state_ == State::busy;
+   }
 
    // True when the protocol waits for a new command.
-   bool waitingForCommand() const { return state_ == State::command; }
+   bool waitingForCommand() const {
+      return state_ == State::command;
+   }
 
-private:
+   private:
    enum class State : uint8_t {
       command,
       complement,

@@ -19,13 +19,13 @@ using Bytes = std::vector<uint8_t>;
 
 // A command code and its complement.
 inline Bytes cmd(uint8_t code) {
-   return {code, static_cast<uint8_t>(code ^ 0xFF)};
+   return { code, static_cast<uint8_t>(code ^ 0xFF) };
 }
 
 // An address, MSB first, and its XOR checksum.
 inline Bytes address(uint32_t value) {
-   Bytes bytes{static_cast<uint8_t>(value >> 24), static_cast<uint8_t>(value >> 16),
-               static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value)};
+   Bytes bytes{ static_cast<uint8_t>(value >> 24), static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 8),
+                static_cast<uint8_t>(value) };
    bytes.push_back(static_cast<uint8_t>(bytes[0] ^ bytes[1] ^ bytes[2] ^ bytes[3]));
    return bytes;
 }
@@ -49,7 +49,7 @@ inline Bytes concat(std::initializer_list<Bytes> parts) {
 
 // Write Memory data: N, the bytes, the checksum.
 inline Bytes writeData(const Bytes &data) {
-   Bytes frame{static_cast<uint8_t>(data.size() - 1)};
+   Bytes frame{ static_cast<uint8_t>(data.size() - 1) };
    frame.insert(frame.end(), data.begin(), data.end());
    frame.push_back(checksum(frame));
    return frame;
@@ -59,7 +59,7 @@ inline Bytes writeData(const Bytes &data) {
 // checksum.
 inline Bytes erasePages(const std::vector<uint16_t> &pages) {
    const auto n = static_cast<uint16_t>(pages.size() - 1);
-   Bytes frame{static_cast<uint8_t>(n >> 8), static_cast<uint8_t>(n)};
+   Bytes frame{ static_cast<uint8_t>(n >> 8), static_cast<uint8_t>(n) };
    for(uint16_t page : pages) {
       frame.push_back(static_cast<uint8_t>(page >> 8));
       frame.push_back(static_cast<uint8_t>(page));
@@ -73,7 +73,10 @@ constexpr uint8_t nack = protocol::nack;
 
 struct Session {
    explicit Session(uint32_t flashSize = FakeTarget::defaultFlashSize)
-      : target{flashSize}, map{flashSize}, bl{map, target.hardware()} {}
+      : target{ flashSize }
+      , map{ flashSize }
+      , bl{ map, target.hardware() } {
+   }
 
    // Sends the bytes and returns the reply. Runs until the protocol took
    // all bytes and has no reply or operation in progress.
@@ -81,7 +84,7 @@ struct Session {
       Bytes reply;
       std::size_t sent = 0;
       for(int guard = 0; guard < 100000; ++guard) {
-         sent += bl.receive(std::span{bytes}.subspan(sent));
+         sent += bl.receive(std::span{ bytes }.subspan(sent));
          const auto output = bl.output();
          reply.insert(reply.end(), output.begin(), output.end());
          bl.consumeOutput(output.size());
