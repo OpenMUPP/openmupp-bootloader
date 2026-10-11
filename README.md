@@ -225,9 +225,18 @@ The new values take effect after a reset. The bootloader resets the MCU
 after the command and stays in bootloader mode. The host then connects
 again.
 
-A power loss during the option byte update clears all WRP bits. At the
-next start, the bootloader protects its area again. The protection of the
-application is then lost. Set it again with Write Protect.
+The bootloader does not change the option bytes when readout protection
+(RDP) is active. On the STM32F1, the write of RDP `0xA5` then starts a
+mass erase of the full flash, also of the bootloader. Write Protect and
+Write Unprotect then get a NACK, and the bootloader runs without the
+self-protection.
+
+A power loss during the option byte update erases all option bytes. After
+the erase, RDP is `0xFF`, which is readout protection. The bootloader
+still runs, but it cannot change the option bytes. The write protection is
+removed. Only a debug probe can remove the readout protection, for example
+with OpenOCD `stm32f1x unlock 0`. This also erases all of the flash: write
+the bootloader and the application again.
 
 ### Update the bootloader
 

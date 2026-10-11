@@ -34,8 +34,11 @@ class Flash : public protocol::FlashTarget, public protocol::OptionBytes {
    // Erases the option bytes and programs RDP (0xA5, no readout
    // protection), the old USER and data bytes, and the WRP bytes. Then
    // reads all option bytes back. Returns false on an error or a
-   // mismatch.
+   // mismatch, and with no change when readout protection is active.
    bool setWriteProtectedGroups(uint32_t groups) override;
+
+   // True when readout protection (RDP) is active (FLASH_OBR.RDPRT).
+   bool readoutProtected() const;
 
    private:
    // True for [address, address + size) in the application area, with no

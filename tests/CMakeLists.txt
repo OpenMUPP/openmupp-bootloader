@@ -15,6 +15,7 @@ add_executable(vsl-bootloader-tests
         main.cpp
         TestAn3155Protocol.cpp
         TestBootDecision.cpp
+        TestFlashRules.cpp
         TestImageHeader.cpp
         TestLayout.cpp
         TestMemoryMap.cpp

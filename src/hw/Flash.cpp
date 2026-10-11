@@ -3,6 +3,7 @@
 #include <cmsis_device.h>
 
 #include "Layout.h"
+#include "boot/FlashRules.h"
 #include "boot/OptionByteValues.h"
 #include "protocol/MemoryMap.h"
 
@@ -41,18 +42,7 @@ bool finished() {
 } // namespace
 
 bool Flash::allowed(uint32_t address, uint32_t size) const {
-   if(size == 0 || address < layout::applicationStart || address >= flashEnd_ || size > flashEnd_ - address) {
-      return false;
-   }
-   const uint32_t first = (address - layout::flashBase) / layout::wrpGroupSize;
-   const uint32_t last = (address + size - 1 - layout::flashBase) / layout::wrpGroupSize;
-   const uint32_t protectedGroups = writeProtectedGroups();
-   for(uint32_t group = first; group <= last; ++group) {
-      if(protectedGroups & (1u << group)) {
-         return false;
-      }
-   }
-   return true;
+   return flashrules::writable(address, size, flashEnd_, writeProtectedGroups());
 }
 
 bool Flash::erasePage(uint32_t address) {
@@ -106,7 +96,16 @@ uint32_t Flash::writeProtectedGroups() const {
    return ~FLASH->WRPR;
 }
 
+bool Flash::readoutProtected() const {
+   return (FLASH->OBR & FLASH_OBR_RDPRT) != 0;
+}
+
 bool Flash::setWriteProtectedGroups(uint32_t groups) {
+   // With readout protection, the RDP program below starts a mass erase of
+   // the flash, also of the bootloader (PM0075, section 2.4.1).
+   if(readoutProtected()) {
+      return false;
+   }
    volatile uint16_t *optionBytes = halfWords(OB_BASE);
    const auto values = optionbytes::program(static_cast<uint8_t>(optionBytes[optionbytes::userIndex]),
                                             static_cast<uint8_t>(optionBytes[optionbytes::data0Index]),

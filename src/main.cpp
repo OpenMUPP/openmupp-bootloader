@@ -19,7 +19,7 @@
 #include <utils/Timekeeping.h>
 
 #include "boot/BootDecision.h"
-#include "boot/OptionByteValues.h"
+#include "boot/FlashRules.h"
 #include "hw/Board.h"
 #include "hw/Boot.h"
 #include "hw/Flash.h"
@@ -91,15 +91,13 @@ void wait(uint32_t ms) {
 
 // Plan section 3.6: the bootloader area is always write-protected.
 void protectBootloader(hw::Flash &flash) {
-   if(BKP->DR3 == selfProtectToken) {
+   const bool triedBefore = BKP->DR3 == selfProtectToken;
+   if(triedBefore) {
       hw::startup::writeBackup(BKP->DR3, 0);
-      return;
    }
    const uint32_t groups = flash.writeProtectedGroups();
-   if((groups & optionbytes::bootloaderGroups) == optionbytes::bootloaderGroups) {
-      return;
-   }
-   if(!flash.setWriteProtectedGroups(groups)) {
+   if(flashrules::selfProtection(triedBefore, groups, flash.readoutProtected()) != flashrules::SelfProtection::protect ||
+      !flash.setWriteProtectedGroups(groups)) {
       return;
    }
    // The new WRP bits take effect after the reset. Stay in the bootloader.
