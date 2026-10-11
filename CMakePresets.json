@@ -6,19 +6,19 @@
       "name": "base",
       "hidden": true,
       "binaryDir": "${sourceDir}/build/${presetName}",
-      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake"
+      "toolchainFile": "${sourceDir}/cmake/gcc_arm.cmake"
     },
     {
       "name": "mini",
       "displayName": "Versaloon Mini",
       "inherits": "base",
-      "cacheVariables": { "VERSALOON_BOOTLOADER_BOARDS": "mini" }
+      "cacheVariables": { "BOARD": "mini" }
     },
     {
       "name": "otheruse",
       "displayName": "OtherUse",
       "inherits": "base",
-      "cacheVariables": { "VERSALOON_BOOTLOADER_BOARDS": "otheruse" }
+      "cacheVariables": { "BOARD": "otheruse" }
     },
     {
       "name": "host-tests",

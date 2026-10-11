@@ -74,10 +74,10 @@ The build fails when the image is larger than the bootloader area
 (issue #6) gives a margin of about 1 KB. When the image grows above
 7.5 KB, change to the 12 KB area.
 
-The toolchain file `cmake/arm-none-eabi.cmake` finds the compiler in the
-`PATH`. To use another toolchain, set `ARM_GNU_TOOLCHAIN` to the root
+The toolchain file `cmake/gcc_arm.cmake` finds the compiler in the
+`PATH`. To use another toolchain, set `GCC_TOOLCHAIN_PREFIX` to the root
 directory of the toolchain. You can set it as a CMake variable
-(`-DARM_GNU_TOOLCHAIN=<dir>`) or as an environment variable. The
+(`-DGCC_TOOLCHAIN_PREFIX=<dir>`) or as an environment variable. The
 toolchain file also sets `arm-none-eabi-gcc-ar` and
 `arm-none-eabi-gcc-ranlib`, because the build uses link-time
 optimisation (LTO).
@@ -86,18 +86,20 @@ These CMake options change the build:
 
 | Option | Default | Content |
 |---|---|---|
-| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build. A preset selects one board. |
+| `BOARD` | `mini` | Board to build for (`mini`, `otheruse`). A preset selects one board. |
+| `VERSALOON_BOOTLOADER_BOARDS` | `${BOARD}` | Boards to build when building multiple boards at once. |
 | `VERSALOON_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
 | `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
 | `VSL_LTO` | `ON` | Link-time optimisation |
 | `VSL_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
 | `VSL_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images, see [Host tests](#host-tests) |
+| `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
-Without a preset, the default builds all boards:
+Without a preset, configure and build for one board:
 
 ```sh
-cmake -S . -B build/all -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
-cmake --build build/all
+cmake -S . -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini
+cmake --build build/mini
 ```
 
 ### Use in a parent project

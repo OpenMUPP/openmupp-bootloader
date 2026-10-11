@@ -25,6 +25,22 @@ workflow:
       when: never
     - if: "$CI_COMMIT_BRANCH"
 
+lint-code:
+  stage: .pre
+  script:
+    - clang-format --version
+    - cmake --version
+    - cd "$CI_PROJECT_DIR"
+    - BUILDDIR=clangformat-build
+    - cmake -S . -B "${BUILDDIR}" -G "Unix Makefiles"
+    - cmake --build ${BUILDDIR} --target clangformat
+    - git diff --numstat
+    - linter_errors=$(git diff --numstat | wc -l)
+    - if [ ! "$linter_errors" -eq "0" ]; then echo "Detected formatting issues; please fix"; git diff; exit 1; else echo "Formatting is correct"; exit 0; fi
+  after_script:
+    - echo "Cleanup changes made"
+    - git checkout .
+
 # The new bootloader (CMake). The build fails when an image is larger than
 # the bootloader area (8 KB): the linker script and a size check after the
 # link both enforce the limit.
@@ -35,7 +51,7 @@ build:
       - BOARD: [mini, otheruse]
   script:
     - cd "$CI_PROJECT_DIR"
-    - cmake --preset ${BOARD} -DARM_GNU_TOOLCHAIN=${GCC_TOOLCHAIN_PREFIX} -DVSL_WERROR=ON
+    - cmake --preset ${BOARD} -DGCC_TOOLCHAIN_PREFIX=${GCC_TOOLCHAIN_PREFIX} -DVSL_WERROR=ON
     - cmake --build --preset ${BOARD} -j`nproc`
   artifacts:
     paths:
