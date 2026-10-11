@@ -1,33 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-# Shared FetchContent source cache — parallel configures are serialized
-# with a file lock so the first build downloads and the rest reuse.
-set(_FC_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}/build/_deps")
-file(MAKE_DIRECTORY "${_FC_SHARED_DIR}")
-file(LOCK "${_FC_SHARED_DIR}/.lock" GUARD PROCESS)
-
-# All downloads land in the shared directory
-set(FETCHCONTENT_BASE_DIR "${_FC_SHARED_DIR}" CACHE PATH "")
-
-# For sources already downloaded, set FETCHCONTENT_SOURCE_DIR_<NAME> so
-# FetchContent skips the subbuild entirely (avoids generator conflicts)
-file(GLOB _fc_src_dirs "${_FC_SHARED_DIR}/*-src")
-foreach(_src_dir ${_fc_src_dirs})
-    get_filename_component(_dir_name "${_src_dir}" NAME)
-    string(REGEX REPLACE "-src$" "" _dep_name "${_dir_name}")
-    string(TOUPPER "${_dep_name}" _dep_upper)
-    set(FETCHCONTENT_SOURCE_DIR_${_dep_upper} "${_src_dir}")
-endforeach()
-
-include(FetchContent)
-
-# Extract git revision
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/generate_version.cmake")
-
-project(versaloon-bootloader
-        LANGUAGES C CXX ASM
-        VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}"
-)
+project(versaloon-bootloader LANGUAGES C CXX ASM)
 
 # Add our CMAKE modules folder
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -35,11 +8,9 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 # Compiler settings
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CXX_DIALECT gnu)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_DIALECT gnu)
 
 option(VSL_WERROR "Treat compiler warnings in the bootloader sources as errors" OFF)
 
@@ -66,31 +37,34 @@ target_compile_definitions(vsl-layout INTERFACE
 # When not cross-compiling, or when explicitly requested via VSL_HOST_TESTS,
 # build the host unit tests instead of the bootloader images.
 if(VSL_HOST_TESTS OR NOT CMAKE_CROSSCOMPILING)
+    if(VSL_HOST_TESTS)
+        message(STATUS "VSL_HOST_TESTS enabled; building host unit tests (tests/)")
+    else()
+        message(STATUS "No cross toolchain configured; building host unit tests (tests/)")
+    endif()
     enable_testing()
     add_subdirectory(tests)
 else()
     # Boards to build.
     set(VSL_BOARDS mini otheruse)
-    if(DEFINED VERSALOON_BOOTLOADER_BOARDS AND NOT DEFINED BOARD)
-        set(BOARD "${VERSALOON_BOOTLOADER_BOARDS}")
-    endif()
-    set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
-    set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
-
-    if(DEFINED VERSALOON_BOOTLOADER_BOARDS)
-        set(_boards_to_build ${VERSALOON_BOOTLOADER_BOARDS})
+    if(DEFINED BOARD AND NOT DEFINED VERSALOON_BOOTLOADER_BOARDS)
+        set(VERSALOON_BOOTLOADER_BOARDS "${BOARD}" CACHE STRING "Boards to build: ${VSL_BOARDS}")
     else()
-        set(_boards_to_build ${BOARD})
+        set(VERSALOON_BOOTLOADER_BOARDS "mini;otheruse" CACHE STRING "Boards to build: ${VSL_BOARDS}")
     endif()
+
+    set(_boards_to_build ${VERSALOON_BOOTLOADER_BOARDS})
+    message(STATUS "Cross-compiling versaloon-bootloader for Cortex-M3 (boards: ${_boards_to_build})")
 
     # system-stm32 gets its compile flags from the target art-build-config
     # (the name comes from libArT). A parent project with its own copy of
     # system-stm32 or art-build-config would give a second target of the same
     # name.
-    if(TARGET system-stm32)
+    if(TARGET system-stm32 OR TARGET art-build-config)
         message(FATAL_ERROR
-            "The parent project already has the target system-stm32. "
-            "Build the bootloader with ExternalProject and pass VSL_SYSTEM_STM32_DIR.")
+            "The parent project already has the target system-stm32 or "
+            "art-build-config. Build the bootloader with ExternalProject and "
+            "pass VSL_SYSTEM_STM32_DIR.")
     endif()
 
     # The source of system-stm32. The default is the submodule. A parent
@@ -117,7 +91,6 @@ else()
         list(APPEND COMMON_OPTIONS -flto)
     endif()
     set(CXX_OPTIONS -fno-exceptions -fno-rtti -fno-use-cxa-atexit -fno-threadsafe-statics -Wno-volatile)
-    set(C_OPTIONS -std=gnu11)
 
     include(BuildConfig)
     art_setup_build_config(art-build-config)
