@@ -47,13 +47,17 @@ if(VSL_HOST_TESTS OR NOT CMAKE_CROSSCOMPILING)
 else()
     # Boards to build.
     set(VSL_BOARDS mini otheruse)
-    if(DEFINED BOARD AND NOT DEFINED VERSALOON_BOOTLOADER_BOARDS)
-        set(VERSALOON_BOOTLOADER_BOARDS "${BOARD}" CACHE STRING "Boards to build: ${VSL_BOARDS}")
+    set(BOARD "" CACHE STRING "Board to build for: ${VSL_BOARDS} (overrides VERSALOON_BOOTLOADER_BOARDS)")
+    set_property(CACHE BOARD PROPERTY STRINGS "" ${VSL_BOARDS})
+
+    set(VERSALOON_BOOTLOADER_BOARDS "mini;otheruse" CACHE STRING "Boards to build: ${VSL_BOARDS}")
+
+    if(BOARD)
+        set(_boards_to_build ${BOARD})
     else()
-        set(VERSALOON_BOOTLOADER_BOARDS "mini;otheruse" CACHE STRING "Boards to build: ${VSL_BOARDS}")
+        set(_boards_to_build ${VERSALOON_BOOTLOADER_BOARDS})
     endif()
 
-    set(_boards_to_build ${VERSALOON_BOOTLOADER_BOARDS})
     message(STATUS "Cross-compiling versaloon-bootloader for Cortex-M3 (boards: ${_boards_to_build})")
 
     # system-stm32 gets its compile flags from the target art-build-config
