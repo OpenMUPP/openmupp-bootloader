@@ -557,6 +557,10 @@ std::size_t write(const uint8_t *data, std::size_t size) {
    return n;
 }
 
+bool sent() {
+   return txLength == 0 && !txBusy && !txZlp;
+}
+
 bool configured() {
    return configuration != 0;
 }
