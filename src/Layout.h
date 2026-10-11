@@ -25,8 +25,7 @@ constexpr uint32_t wrpGroupSize = 4096;
 constexpr uint32_t bootloaderSize = VSL_BOOTLOADER_AREA_SIZE;
 constexpr uint32_t applicationStart = flashBase + bootloaderSize;
 
-static_assert(bootloaderSize > 0 && bootloaderSize % wrpGroupSize == 0,
-              "the bootloader area must be a multiple of 4 KB");
+static_assert(bootloaderSize > 0 && bootloaderSize % wrpGroupSize == 0, "the bootloader area must be a multiple of 4 KB");
 
 // True when [address, address + size) has a byte in the bootloader area.
 // An erase or a write there gets a NACK. A range that wraps past the end

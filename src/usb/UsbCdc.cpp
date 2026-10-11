@@ -13,26 +13,25 @@ constexpr uint16_t vendorId = 0x0483;
 constexpr uint16_t productId = 0x5740;
 
 const uint8_t deviceDescriptor[18] = {
-   18, 1, 0x00, 0x02,      // bLength, DEVICE, bcdUSB 2.00
+   18, 1, 0x00, 0x02, // bLength, DEVICE, bcdUSB 2.00
    // Class CDC, subclass ACM: Windows binds its inbox usbser.sys driver to
    // the compatible ID USB\Class_02&SubClass_02 without an INF file.
-   0x02, 0x02, 0x00, 64,   // class, subclass, protocol, bMaxPacketSize0
-   vendorId & 0xFF, vendorId >> 8, productId & 0xFF, productId >> 8,
-   0x00, 0x02,             // bcdDevice 2.00
-   1, 2, 3, 1,             // iManufacturer, iProduct, iSerialNumber, bNumConfigurations
+   0x02, 0x02, 0x00, 64, // class, subclass, protocol, bMaxPacketSize0
+   vendorId & 0xFF, vendorId >> 8, productId & 0xFF, productId >> 8, 0x00, 0x02, // bcdDevice 2.00
+   1, 2, 3, 1, // iManufacturer, iProduct, iSerialNumber, bNumConfigurations
 };
 
 const uint8_t configurationDescriptor[67] = {
-   9, 2, 67, 0, 2, 1, 0, 0x80, 50,           // CONFIGURATION, 2 interfaces, bus powered, 100 mA
-   9, 4, 0, 0, 1, 0x02, 0x02, 0x01, 0,       // INTERFACE 0: CDC ACM, 1 endpoint
-   5, 0x24, 0x00, 0x10, 0x01,                // CDC header 1.10
-   5, 0x24, 0x01, 0x00, 1,                   // call management, data interface 1
-   4, 0x24, 0x02, 0x02,                      // ACM: line coding and control line state
-   5, 0x24, 0x06, 0, 1,                      // union: control 0, data 1
-   7, 5, 0x81, 0x03, 8, 0, 255,              // EP1 IN interrupt, 8 bytes
-   9, 4, 1, 0, 2, 0x0A, 0x00, 0x00, 0,       // INTERFACE 1: CDC data, 2 endpoints
-   7, 5, 0x02, 0x02, 64, 0, 0,               // EP2 OUT bulk, 64 bytes
-   7, 5, 0x82, 0x02, 64, 0, 0,               // EP2 IN bulk, 64 bytes
+   9, 2,    67,   0,    2,    1,    0,    0x80, 50, // CONFIGURATION, 2 interfaces, bus powered, 100 mA
+   9, 4,    0,    0,    1,    0x02, 0x02, 0x01, 0,  // INTERFACE 0: CDC ACM, 1 endpoint
+   5, 0x24, 0x00, 0x10, 0x01,                       // CDC header 1.10
+   5, 0x24, 0x01, 0x00, 1,                          // call management, data interface 1
+   4, 0x24, 0x02, 0x02,                             // ACM: line coding and control line state
+   5, 0x24, 0x06, 0,    1,                          // union: control 0, data 1
+   7, 5,    0x81, 0x03, 8,    0,    255,            // EP1 IN interrupt, 8 bytes
+   9, 4,    1,    0,    2,    0x0A, 0x00, 0x00, 0,  // INTERFACE 1: CDC data, 2 endpoints
+   7, 5,    0x02, 0x02, 64,   0,    0,              // EP2 OUT bulk, 64 bytes
+   7, 5,    0x82, 0x02, 64,   0,    0,              // EP2 IN bulk, 64 bytes
 };
 
 const uint8_t languageString[4] = { 4, 3, 0x09, 0x04 };
@@ -89,8 +88,7 @@ constexpr uint8_t addrTx = 0, countTx = 1, addrRx = 2, countRx = 3;
 
 // Bits that a write keeps: the CTR flags are "write 0 to clear", the STAT
 // and DTOG bits are "write 1 to toggle".
-constexpr uint16_t epKeep = USB_EP_CTR_RX | USB_EP_SETUP | USB_EP_T_FIELD | USB_EP_KIND | USB_EP_CTR_TX |
-                            USB_EPADDR_FIELD;
+constexpr uint16_t epKeep = USB_EP_CTR_RX | USB_EP_SETUP | USB_EP_T_FIELD | USB_EP_KIND | USB_EP_CTR_TX | USB_EPADDR_FIELD;
 constexpr uint16_t statTx = 0x0030;
 constexpr uint16_t statRx = 0x3000;
 constexpr uint16_t dtogTx = 0x0040;
@@ -114,8 +112,7 @@ void clearCtr(uint8_t ep, uint16_t flag) {
 void openEndpoint(uint8_t ep, uint16_t type, uint16_t stat) {
    const uint16_t reg = epr(ep);
    // Toggle the DTOG and STAT bits from their current value to the wanted value.
-   epr(ep) = static_cast<uint16_t>(((reg & (dtogTx | dtogRx | statTx | statRx)) ^ stat) | type | ep | USB_EP_CTR_RX |
-                                   USB_EP_CTR_TX);
+   epr(ep) = static_cast<uint16_t>(((reg & (dtogTx | dtogRx | statTx | statRx)) ^ stat) | type | ep | USB_EP_CTR_RX | USB_EP_CTR_TX);
 }
 
 // ----------------------------------------------------------------- state
@@ -128,11 +125,11 @@ struct Setup {
    uint16_t wLength;
 };
 
-const uint8_t *ctrlData;    // data stage IN: remaining data
-uint16_t ctrlLeft;          // data stage IN: remaining bytes
-bool ctrlZlp;               // data stage IN: end with a zero-length packet
-bool ctrlReceive;           // data stage OUT: line coding expected
-uint8_t pendingAddress;     // SET_ADDRESS: applied after the status stage
+const uint8_t *ctrlData; // data stage IN: remaining data
+uint16_t ctrlLeft;       // data stage IN: remaining bytes
+bool ctrlZlp;            // data stage IN: end with a zero-length packet
+bool ctrlReceive;        // data stage OUT: line coding expected
+uint8_t pendingAddress;  // SET_ADDRESS: applied after the status stage
 uint8_t configuration;
 uint32_t resets;
 uint8_t lineCoding[7] = { 0x00, 0xC2, 0x01, 0x00, 0, 0, 8 }; // 115200 8N1
@@ -230,8 +227,7 @@ void setHalt(uint8_t address, bool halt) {
    const uint16_t dtog = in ? dtogTx : dtogRx;
    // EP1 (notification) never sends, so it resumes as NAK. The queue state
    // belongs to EP2.
-   const uint16_t resume = in ? (ep == 2 && txBusy ? USB_EP_TX_VALID : USB_EP_TX_NAK)
-                              : (rxFull ? USB_EP_RX_NAK : USB_EP_RX_VALID);
+   const uint16_t resume = in ? (ep == 2 && txBusy ? USB_EP_TX_VALID : USB_EP_TX_NAK) : (rxFull ? USB_EP_RX_NAK : USB_EP_RX_VALID);
    const uint16_t reg = epr(ep);
    epr(ep) = static_cast<uint16_t>(((reg & (epKeep | dtog | mask)) ^ resume) | USB_EP_CTR_RX | USB_EP_CTR_TX);
 }
@@ -246,11 +242,16 @@ bool isHalted(uint8_t address) {
 
 const uint8_t *stringDescriptor(uint8_t index) {
    switch(index) {
-   case 0: return languageString;
-   case 1: return manufacturerString;
-   case 2: return productString;
-   case 3: return serialString;
-   default: return nullptr;
+   case 0:
+      return languageString;
+   case 1:
+      return manufacturerString;
+   case 2:
+      return productString;
+   case 3:
+      return serialString;
+   default:
+      return nullptr;
    }
 }
 
