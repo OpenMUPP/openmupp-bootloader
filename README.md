@@ -87,8 +87,8 @@ These CMake options change the build:
 
 | Option | Default | Content |
 |---|---|---|
-| `BOARD` | `mini` | Board to build for (`mini`, `otheruse`). A preset selects one board. |
-| `VERSALOON_BOOTLOADER_BOARDS` | `${BOARD}` | Boards to build when building multiple boards at once. |
+| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`). Overrides `VERSALOON_BOOTLOADER_BOARDS`. A preset selects one board. |
+| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. |
 | `VERSALOON_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
 | `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
 | `VSL_LTO` | `ON` | Link-time optimisation |
