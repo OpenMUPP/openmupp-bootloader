@@ -31,11 +31,11 @@ struct Region {
 
 // Memory of the STM32F103x8/xB (RM0008, section 3.3).
 namespace memory {
-constexpr Region ram{0x2000'0000, 20 * 1024};
-constexpr Region systemMemory{0x1FFF'F000, 0x800};
-constexpr Region optionBytes{0x1FFF'F800, 16};
-constexpr Region flashSizeRegister{0x1FFF'F7E0, 2};
-constexpr Region uid{0x1FFF'F7E8, 12};
+constexpr Region ram{ 0x2000'0000, 20 * 1024 };
+constexpr Region systemMemory{ 0x1FFF'F000, 0x800 };
+constexpr Region optionBytes{ 0x1FFF'F800, 16 };
+constexpr Region flashSizeRegister{ 0x1FFF'F7E0, 2 };
+constexpr Region uid{ 0x1FFF'F7E8, 12 };
 
 constexpr uint32_t pageSize = 1024;
 // The WRP bits cover at most 32 groups of 4 KB.
@@ -43,19 +43,28 @@ constexpr uint32_t maxFlashSize = 32 * layout::wrpGroupSize;
 } // namespace memory
 
 class MemoryMap {
-public:
+   public:
    // flashSize: the flash size in bytes, from the flash size register.
    // The value is rounded down to whole pages and limited to 128 KB.
    explicit constexpr MemoryMap(uint32_t flashSize)
-      : flash_{layout::flashBase, limit(flashSize)} {}
+      : flash_{ layout::flashBase, limit(flashSize) } {
+   }
 
-   constexpr const Region &flash() const { return flash_; }
+   constexpr const Region &flash() const {
+      return flash_;
+   }
 
-   constexpr uint32_t flashEnd() const { return flash_.start + flash_.size; }
+   constexpr uint32_t flashEnd() const {
+      return flash_.start + flash_.size;
+   }
 
    // The number of 1 KB pages and of 4 KB WRP groups in the flash.
-   constexpr uint32_t pageCount() const { return flash_.size / memory::pageSize; }
-   constexpr uint32_t groupCount() const { return flash_.size / layout::wrpGroupSize; }
+   constexpr uint32_t pageCount() const {
+      return flash_.size / memory::pageSize;
+   }
+   constexpr uint32_t groupCount() const {
+      return flash_.size / layout::wrpGroupSize;
+   }
 
    // True when each byte of [address, address + size) is in a readable
    // region. The range can cross from one region into an adjacent one.
@@ -63,8 +72,9 @@ public:
       if(size == 0 || address + (size - 1) < address) {
          return false;
       }
-      const Region regions[] = {flash_, memory::ram, memory::systemMemory, memory::optionBytes,
-                                memory::flashSizeRegister, memory::uid};
+      const Region regions[] = {
+         flash_, memory::ram, memory::systemMemory, memory::optionBytes, memory::flashSizeRegister, memory::uid
+      };
       uint32_t remaining = size;
       while(remaining > 0) {
          const Region *found = nullptr;
@@ -101,7 +111,7 @@ public:
       return address % memory::pageSize == 0 && writable(address, memory::pageSize);
    }
 
-private:
+   private:
    static constexpr uint32_t limit(uint32_t flashSize) {
       const uint32_t size = flashSize < memory::maxFlashSize ? flashSize : memory::maxFlashSize;
       return size - size % memory::pageSize;

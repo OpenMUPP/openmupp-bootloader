@@ -20,17 +20,17 @@ The pull-up pin is high when the USB device is connected.
 The bootloader is in a rewrite (issue #4). The rewritten bootloader uses
 a smaller area. The old and the new layout are not compatible.
 
-| Area | Old bootloader (`Makefile`) | New bootloader (CMake) |
+| Area | Legacy bootloader | New bootloader (CMake) |
 |---|---|---|
 | Bootloader | `0x08000000`, 10 KB | `0x08000000`, 8 KB |
 | Application | `0x08002800`, rest of the flash | `0x08002000`, rest of the flash |
 
 The layout is the same for all boards.
 
-The CMake build of the new bootloader is not complete yet. It makes an
-empty image (issue #7). Until issue #10 is done, use the old bootloader
-from the `Makefile` on a board. The rest of this README describes the
-old bootloader, except where it names the new one.
+The CMake build of the new bootloader is in progress (issue #7). It makes an
+empty image. The rest of this README describes the legacy bootloader, except
+where it names the new one. Check out commit `41de34d` to build the legacy
+bootloader with the `Makefile`.
 
 The flash size is different on each part. For example, the STM32F103C8
 has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
@@ -75,10 +75,10 @@ The build fails when the image is larger than the bootloader area
 (issue #6) gives a margin of about 1 KB. When the image grows above
 7.5 KB, change to the 12 KB area.
 
-The toolchain file `cmake/arm-none-eabi.cmake` finds the compiler in the
-`PATH`. To use another toolchain, set `ARM_GNU_TOOLCHAIN` to the root
+The toolchain file `cmake/gcc_arm.cmake` finds the compiler in the
+`PATH`. To use another toolchain, set `GCC_TOOLCHAIN_PREFIX` to the root
 directory of the toolchain. You can set it as a CMake variable
-(`-DARM_GNU_TOOLCHAIN=<dir>`) or as an environment variable. The
+(`-DGCC_TOOLCHAIN_PREFIX=<dir>`) or as an environment variable. The
 toolchain file also sets `arm-none-eabi-gcc-ar` and
 `arm-none-eabi-gcc-ranlib`, because the build uses link-time
 optimisation (LTO).
@@ -87,18 +87,20 @@ These CMake options change the build:
 
 | Option | Default | Content |
 |---|---|---|
-| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build. A preset selects one board. |
+| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`). Overrides `VERSALOON_BOOTLOADER_BOARDS`. A preset selects one board. |
+| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. |
 | `VERSALOON_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
 | `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
 | `VSL_LTO` | `ON` | Link-time optimisation |
 | `VSL_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
 | `VSL_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images, see [Host tests](#host-tests) |
+| `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
-Without a preset, the default builds all boards:
+Without a preset, configure and build for one board:
 
 ```sh
-cmake -S . -B build/all -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
-cmake --build build/all
+cmake -S . -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini
+cmake --build build/mini
 ```
 
 ### Use in a parent project
@@ -120,21 +122,6 @@ The parent project must set a cross toolchain with C, C++ and ASM before
 its first `project()` call. This does not work when the parent project
 has a target `system-stm32` or `art-build-config`. Then the configure
 step stops with an error: use `ExternalProject`.
-
-### Old bootloader (`Makefile`)
-
-The `Makefile` builds the old bootloader (C, ST libraries, 10 KB area).
-It stays until issue #10 removes the old sources.
-
-```sh
-make                 # all boards
-make BOARD=mini      # one board
-```
-
-The `Makefile` writes `build/<board>/versaloon-bootloader-<board>.*`.
-These are the same paths as the CMake presets. Use another `BUILD_ROOT`
-when you build both, for example `make BUILD_ROOT=build-legacy`. To use
-another toolchain prefix, set `CROSS_COMPILE`.
 
 ### Host tests
 

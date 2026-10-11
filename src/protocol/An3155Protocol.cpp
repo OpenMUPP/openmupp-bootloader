@@ -16,12 +16,13 @@ constexpr uint16_t massErase = 0xFFFF;
 } // namespace
 
 An3155Protocol::An3155Protocol(const MemoryMap &map, const Hardware &hardware)
-   : map_{map}, hardware_{hardware} {}
+   : map_{ map }
+   , hardware_{ hardware } {
+}
 
 std::size_t An3155Protocol::receive(std::span<const uint8_t> data) {
    std::size_t taken = 0;
-   while(taken < data.size() && outputSize_ == 0 && state_ != State::busy &&
-         state_ != State::finished) {
+   while(taken < data.size() && outputSize_ == 0 && state_ != State::busy && state_ != State::finished) {
       take(data[taken]);
       ++taken;
    }
@@ -275,7 +276,7 @@ void An3155Protocol::takeReadLength(uint8_t byte) {
       return;
    }
    put(ack);
-   hardware_.memory.read(address_, std::span{output_ + outputSize_, size});
+   hardware_.memory.read(address_, std::span{ output_ + outputSize_, size });
    outputSize_ += size;
    enter(State::command);
 }
@@ -317,8 +318,7 @@ void An3155Protocol::takeErasePage(uint8_t byte) {
    } else {
       const uint32_t page = static_cast<uint32_t>(field_[0]) << 8 | byte;
       const uint32_t address = layout::flashBase + page * memory::pageSize;
-      if(page < map_.pageCount() && map_.erasable(address) &&
-         !groupsProtected(address, memory::pageSize)) {
+      if(page < map_.pageCount() && map_.erasable(address) && !groupsProtected(address, memory::pageSize)) {
          pages_[page / 32] |= 1u << (page % 32);
       } else {
          failed_ = true;
@@ -374,7 +374,7 @@ void An3155Protocol::takeProtectGroup(uint8_t byte) {
 void An3155Protocol::runJob() {
    switch(job_) {
    case Job::write:
-      finish(hardware_.flash.write(address_, std::span<const uint8_t>{data_, expected_}));
+      finish(hardware_.flash.write(address_, std::span<const uint8_t>{ data_, expected_ }));
       break;
 
    case Job::erase:
@@ -383,8 +383,7 @@ void An3155Protocol::runJob() {
 
    case Job::protect:
    case Job::unprotect: {
-      const uint32_t groups =
-         job_ == Job::protect ? hardware_.optionBytes.writeProtectedGroups() | groups_ : 0;
+      const uint32_t groups = job_ == Job::protect ? hardware_.optionBytes.writeProtectedGroups() | groups_ : 0;
       const bool ok = hardware_.optionBytes.setWriteProtectedGroups(groups | bootloaderGroupMask);
       // Reset also after an error: the option bytes can be half-written,
       // and the bootloader protects its own area again at the start.

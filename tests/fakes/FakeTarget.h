@@ -20,16 +20,21 @@ class FakeTarget : public protocol::FlashTarget,
                    public protocol::OptionBytes,
                    public protocol::Application,
                    public protocol::Clock {
-public:
+   public:
    static constexpr uint32_t defaultFlashSize = 64 * 1024;
-   static constexpr uint32_t bootloaderGroupMask =
-      (1u << (layout::bootloaderSize / layout::wrpGroupSize)) - 1;
+   static constexpr uint32_t bootloaderGroupMask = (1u << (layout::bootloaderSize / layout::wrpGroupSize)) - 1;
 
-   explicit FakeTarget(uint32_t flashSize = defaultFlashSize) : flash(flashSize, 0xFF) {}
+   explicit FakeTarget(uint32_t flashSize = defaultFlashSize)
+      : flash(flashSize, 0xFF) {
+   }
 
-   protocol::Hardware hardware() { return {*this, *this, *this, *this, *this}; }
+   protocol::Hardware hardware() {
+      return { *this, *this, *this, *this, *this };
+   }
 
-   uint8_t &flashByte(uint32_t address) { return flash.at(address - layout::flashBase); }
+   uint8_t &flashByte(uint32_t address) {
+      return flash.at(address - layout::flashBase);
+   }
 
    // The value that the fake returns for a readable address outside the
    // flash.
@@ -63,8 +68,7 @@ public:
 
    bool write(uint32_t address, std::span<const uint8_t> data) override {
       ++writes;
-      if(!allowed(address, static_cast<uint32_t>(data.size())) || address % 4 != 0 ||
-         data.size() % 4 != 0) {
+      if(!allowed(address, static_cast<uint32_t>(data.size())) || address % 4 != 0 || data.size() % 4 != 0) {
          ++violations;
          return false;
       }
@@ -81,7 +85,9 @@ public:
       return true;
    }
 
-   uint32_t writeProtectedGroups() const override { return protectedGroups; }
+   uint32_t writeProtectedGroups() const override {
+      return protectedGroups;
+   }
 
    bool setWriteProtectedGroups(uint32_t groups) override {
       optionByteWrites.push_back(groups);
@@ -93,9 +99,13 @@ public:
       return true;
    }
 
-   bool isValid() const override { return applicationValid; }
+   bool isValid() const override {
+      return applicationValid;
+   }
 
-   uint32_t milliseconds() const override { return now; }
+   uint32_t milliseconds() const override {
+      return now;
+   }
 
    std::vector<uint8_t> flash;
    uint32_t now = 0;
@@ -111,11 +121,10 @@ public:
    std::vector<uint32_t> erasedPages;
    std::vector<uint32_t> optionByteWrites;
 
-private:
+   private:
    // True for a range in the application area with no protected group.
    bool allowed(uint32_t address, uint32_t size) const {
-      if(size == 0 || address < layout::applicationStart ||
-         address - layout::flashBase + size > flash.size()) {
+      if(size == 0 || address < layout::applicationStart || address - layout::flashBase + size > flash.size()) {
          return false;
       }
       for(uint32_t a = address; a < address + size; a += 1) {
