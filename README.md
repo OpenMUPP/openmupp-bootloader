@@ -238,6 +238,10 @@ removed. Only a debug probe can remove the readout protection, for example
 with OpenOCD `stm32f1x unlock 0`. This also erases all of the flash: write
 the bootloader and the application again.
 
+The bootloader keeps the USER byte. If the USER byte selects the hardware
+watchdog (`WDG_SW` = 0), the bootloader reloads the watchdog in its main
+loop.
+
 ### Update the bootloader
 
 To write a new bootloader, use a debug probe (SWD). Remove the write

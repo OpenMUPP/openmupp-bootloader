@@ -65,6 +65,13 @@ class Memory : public protocol::MemoryReader {
    }
 };
 
+// With WDG_SW = 0 in the USER option byte, the independent watchdog runs
+// from the reset (about 0.4 s). The bootloader keeps the USER byte, so it
+// reloads the watchdog. The reload has no effect when the watchdog is off.
+void reloadWatchdog() {
+   IWDG->KR = 0xAAAA;
+}
+
 void setPullUp(bool on) {
    board::usbPullUp.set(on);
 }
@@ -72,6 +79,7 @@ void setPullUp(bool on) {
 void wait(uint32_t ms) {
    const uint32_t start = milliseconds();
    while(milliseconds() - start < ms) {
+      reloadWatchdog();
    }
 }
 
@@ -80,6 +88,7 @@ void wait(uint32_t ms) {
 [[noreturn]] void restart(uint16_t dr1, uint16_t dr2) {
    const uint32_t start = milliseconds();
    while(!usbcdc::sent() && milliseconds() - start < drainMs) {
+      reloadWatchdog();
       usbcdc::poll();
    }
    setPullUp(false);
@@ -185,6 +194,7 @@ int main() {
    std::size_t taken = 0;
 
    for(;;) {
+      reloadWatchdog();
       usbcdc::poll();
       const uint32_t now = milliseconds();
 
