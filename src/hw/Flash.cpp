@@ -18,11 +18,14 @@ volatile uint16_t *halfWords(uint32_t address) {
    return reinterpret_cast<volatile uint16_t *>(address);
 }
 
+// Unlocks FLASH_CR and clears old status flags, so finished() sees only
+// the flags of the next operation.
 void unlock() {
    if(FLASH->CR & FLASH_CR_LOCK) {
       FLASH->KEYR = key1;
       FLASH->KEYR = key2;
    }
+   FLASH->SR = errorFlags | FLASH_SR_EOP;
 }
 
 // Waits for the end of the operation and clears the status flags. Returns
