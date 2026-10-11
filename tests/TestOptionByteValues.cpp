@@ -43,3 +43,22 @@ TEST_CASE("a stored option byte has the complement in the high byte") {
    CHECK(optionbytes::stored(0xFF) == 0x00FF);
    CHECK(optionbytes::stored(0x00) == 0xFF00);
 }
+
+TEST_CASE("WRP bytes of 0xFF stay erased, other bytes are programmed") {
+   const auto values = program(0xFF, 0xFF, 0xFF, 0);
+   CHECK_FALSE(optionbytes::skip(optionbytes::rdpIndex, values[optionbytes::rdpIndex]));
+   // USER and data bytes are always programmed, also 0xFF.
+   CHECK_FALSE(optionbytes::skip(optionbytes::userIndex, 0xFF));
+   CHECK_FALSE(optionbytes::skip(optionbytes::data0Index, 0xFF));
+   CHECK_FALSE(optionbytes::skip(optionbytes::data1Index, 0xFF));
+   // WRP0 has the bootloader groups: never 0xFF.
+   CHECK_FALSE(optionbytes::skip(optionbytes::wrp0Index, values[optionbytes::wrp0Index]));
+   CHECK(optionbytes::skip(optionbytes::wrp0Index + 1, values[optionbytes::wrp0Index + 1]));
+   CHECK_FALSE(optionbytes::skip(optionbytes::wrp0Index + 1, 0xFE));
+}
+
+TEST_CASE("the expected read-back of a skipped byte is the erased value") {
+   CHECK(optionbytes::expected(optionbytes::wrp0Index + 3, 0xFF) == optionbytes::erased);
+   CHECK(optionbytes::expected(optionbytes::wrp0Index + 3, 0x7F) == 0x807F);
+   CHECK(optionbytes::expected(optionbytes::userIndex, 0xFF) == 0x00FF);
+}

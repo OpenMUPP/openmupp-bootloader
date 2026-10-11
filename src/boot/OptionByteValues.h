@@ -54,4 +54,19 @@ constexpr uint16_t stored(uint8_t value) {
    return static_cast<uint16_t>(value | (static_cast<uint8_t>(~value) << 8));
 }
 
+// The erased value of an option byte.
+constexpr uint16_t erased = 0xFFFF;
+
+// True when the driver does not program the option byte: a WRP byte of
+// 0xFF (no group protected) stays erased, as in the ST StdPeriph and HAL
+// drivers. The option byte loader accepts an erased WRP byte.
+constexpr bool skip(std::size_t index, uint8_t value) {
+   return index >= wrp0Index && value == 0xFF;
+}
+
+// The half-word that the option byte holds after the update.
+constexpr uint16_t expected(std::size_t index, uint8_t value) {
+   return skip(index, value) ? erased : stored(value);
+}
+
 } // namespace optionbytes

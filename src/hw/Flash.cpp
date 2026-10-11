@@ -125,12 +125,14 @@ bool Flash::setWriteProtectedGroups(uint32_t groups) {
    // readout protection.
    FLASH->CR = FLASH_CR_OPTWRE | FLASH_CR_OPTPG;
    for(std::size_t i = 0; i < optionbytes::count; ++i) {
-      optionBytes[i] = values[i];
-      ok = finished() && ok;
+      if(!optionbytes::skip(i, values[i])) {
+         optionBytes[i] = values[i];
+         ok = finished() && ok;
+      }
    }
    FLASH->CR = FLASH_CR_LOCK;
    for(std::size_t i = 0; i < optionbytes::count; ++i) {
-      ok = ok && optionBytes[i] == optionbytes::stored(values[i]);
+      ok = ok && optionBytes[i] == optionbytes::expected(i, values[i]);
    }
    return ok;
 }
