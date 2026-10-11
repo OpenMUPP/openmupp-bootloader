@@ -121,6 +121,7 @@ else()
         # The flash driver, the USB driver and the AN3155 protocol for #10.
         # The empty image does not use them yet; the build compiles them, so
         # CI checks them.
+        "${CMAKE_CURRENT_LIST_DIR}/src/hw/Boot.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/hw/Flash.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/protocol/An3155Protocol.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/usb/UsbCdc.cpp")
