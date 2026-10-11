@@ -182,6 +182,7 @@ if(COMMAND clangformat_setup)
     file(GLOB_RECURSE FORMAT_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/Layout.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/boot/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/protocol/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/protocol/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/usb/*.cpp"
