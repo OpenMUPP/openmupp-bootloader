@@ -29,7 +29,8 @@ The layout is the same for all boards.
 
 The CMake build of the new bootloader is in progress (issue #7). It makes an
 empty image. The rest of this README describes the legacy bootloader, except
-where it names the new one.
+where it names the new one. Check out commit `41de34d` to build the legacy
+bootloader with the `Makefile`.
 
 The flash size is different on each part. For example, the STM32F103C8
 has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
