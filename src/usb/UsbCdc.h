@@ -66,6 +66,10 @@ std::size_t read(uint8_t *data, std::size_t size);
 // size when the queue is full).
 std::size_t write(const uint8_t *data, std::size_t size);
 
+// True when all queued bytes are sent, with the zero-length packet if
+// one is necessary. Call it before a reset that must not lose a reply.
+bool sent();
+
 // True when the host has configured the device.
 bool configured();
 

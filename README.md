@@ -7,30 +7,31 @@ with the ID `0483:5740`. It uses the STM32 serial bootloader protocol
 
 ## Boards
 
-| Board | `BOARD` | USB D+ pull-up | LEDs | Key |
+| Board | `BOARD` | USB D+ pull-up | LED | Key |
 |---|---|---|---|---|
-| Versaloon Mini (MiniRelease1) | `mini` | PC13 | PA15, PB5 | PB9 |
-| OtherUse | `otheruse` | PA2 | PA15, PB5 | PB9 |
+| Versaloon Mini (MiniRelease1) | `mini` | PC13 | PA15 (red) | PB9 |
+| OtherUse | `otheruse` | PA2 | PA15 (red) | PB9 |
 
 Both boards have a 12 MHz crystal.
 The pull-up pin is high when the USB device is connected.
+The LED is on when PA15 is low. The key is down when PB9 is low.
+The pins are the same as in versaloon-next-gen (`src/board/boards/`).
 
 ## Memory layout
 
-The bootloader is in a rewrite (issue #4). The rewritten bootloader uses
-a smaller area. The old and the new layout are not compatible.
-
-| Area | Legacy bootloader | New bootloader (CMake) |
+| Area | Address | Size |
 |---|---|---|
-| Bootloader | `0x08000000`, 10 KB | `0x08000000`, 8 KB |
-| Application | `0x08002800`, rest of the flash | `0x08002000`, rest of the flash |
+| Bootloader | `0x08000000` | 8 KB |
+| Application | `0x08002000` | Rest of the flash: 56 KB on a 64 KB part |
 
 The layout is the same for all boards.
 
-The CMake build of the new bootloader is in progress (issue #7). It makes an
-empty image. The rest of this README describes the legacy bootloader, except
-where it names the new one. Check out commit `41de34d` to build the legacy
-bootloader with the `Makefile`.
+The bootloader was rewritten in C++ (issue #4). The legacy bootloader used
+a 10 KB area, with the application at `0x08002800`. The two layouts are not
+compatible. A board with the legacy bootloader keeps the legacy layout
+until you write the new bootloader with a debug probe, see
+[Update the bootloader](#update-the-bootloader). The legacy bootloader has
+the tag `v1-legacy`.
 
 The flash size is different on each part. For example, the STM32F103C8
 has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
@@ -38,8 +39,6 @@ size from the flash size register (`0x1FFFF7E0`) at run time. It sends a
 NACK (negative acknowledge) for a write or an erase outside the flash.
 
 ## Build
-
-### New bootloader (CMake)
 
 You need CMake 3.21 or later and the Arm GNU toolchain
 (`arm-none-eabi-gcc`, `arm-none-eabi-g++`). The build gets the library
@@ -71,9 +70,8 @@ The build writes these files to the build directory. A preset uses
 - `versaloon-bootloader-<board>.map`
 
 The build fails when the image is larger than the bootloader area
-(8 KB). In that case the build removes the image files. The size spike
-(issue #6) gives a margin of about 1 KB. When the image grows above
-7.5 KB, change to the 12 KB area.
+(8 KB). In that case the build removes the image files. The image is
+about 7 KB. When the image grows above 7.5 KB, change to the 12 KB area.
 
 The toolchain file `cmake/gcc_arm.cmake` finds the compiler in the
 `PATH`. To use another toolchain, set `GCC_TOOLCHAIN_PREFIX` to the root
@@ -136,24 +134,145 @@ ctest --preset host-tests
 
 ## Use
 
-1. Hold the key (PB9) down and reset the board.
-2. The bootloader starts and the red LED (PA15) comes on.
-3. Write the application with `stm32flash`:
+1. Hold the key (PB9) down and reset the board. An application can also
+   send a boot request, see
+   [Start the bootloader from the application](#start-the-bootloader-from-the-application).
+2. The bootloader starts and the red LED (PA15) comes on. The LED
+   flickers when there is USB traffic.
+3. Write a stamped application image (see
+   [Application image header](#application-image-header)) with
+   `stm32flash`:
 
    ```sh
-   stm32flash -w app.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w app.bin -v -S 0x08002000 /dev/ttyACM0
    ```
 
-When the key is not down at reset and no boot request is set, the
-bootloader starts the application.
+4. Start the application:
+
+   ```sh
+   stm32flash -g 0x08002000 /dev/ttyACM0
+   ```
+
+The bootloader sends a NACK to `GO` when the application is not valid.
+`GO` accepts only the application start address.
+
+### Start-up
+
+The bootloader decides straight after the reset, before the clock setup.
+It uses this order:
+
+1. `0xB007` in `BKP->DR1` (boot request): stay in the bootloader.
+2. GO token in `BKP->DR2`: start the application.
+3. Key down: stay in the bootloader.
+4. Application not valid: stay in the bootloader.
+5. Otherwise: start the application.
+
+The bootloader clears the boot request and the GO token. Each has an
+effect for one reset only.
+
+The application starts with all peripherals in their reset state. The
+bootloader sets `VTOR` and the main stack pointer from the application
+vector table. Then it jumps to the reset vector with all interrupts masked
+(`PRIMASK` set). The application must clear `PRIMASK`.
+
+`GO` does not jump from the bootloader. It writes the GO token to
+`BKP->DR2`, disconnects from USB and resets the MCU. Step 2 then starts
+the application. Thus the host sees a USB disconnect, and the application
+starts in the reset state.
+
+The bootloader resets the MCU on a fault.
+
+### Commands
+
+The bootloader reports protocol version 3.1 and supports these commands:
+
+| Code | Command | Behavior |
+|---|---|---|
+| `0x00` | Get | Version and command list |
+| `0x01` | Get Version | Version 3.1 |
+| `0x02` | Get ID | `0x0410` (STM32F10xx medium density) |
+| `0x11` | Read Memory | Flash, RAM, system memory, option bytes, flash size and UID registers. Other addresses get a NACK. |
+| `0x21` | Go | Application start address and valid application only |
+| `0x31` | Write Memory | Application area only |
+| `0x44` | Extended Erase | Application pages. `0xFFFF` (mass erase) erases the unprotected application pages. |
+| `0x63` | Write Protect | 4 KB groups of the application area, then a reset |
+| `0x73` | Write Unprotect | Application area, then a reset |
+| `0x82` | Readout Protect | Always NACK |
+| `0x92` | Readout Unprotect | Always NACK |
+
+An erase or a write in the bootloader area or in a write-protected group
+gets a NACK. A command that stops for more than 1 s between two bytes is
+discarded. A USB reset or a disconnect also discards the command.
+
+## Flash protection
+
+The bootloader area is always write-protected. At each start in
+bootloader mode, the bootloader reads the write protection (WRP) bits of
+its area. If a bit is clear, the bootloader sets it and resets the MCU.
+This occurs one time after a debug probe writes the bootloader. If the
+option byte update fails, the bootloader continues without the protection
+and tries again at the next start.
+
+One WRP bit protects a group of 4 KB (4 pages). Write Protect (`0x63`)
+and Write Unprotect (`0x73`) change only the groups of the application
+area. They erase the option bytes and write them again:
+
+- RDP (readout protection) is always `0xA5`: no readout protection.
+- The USER byte and the two data bytes keep their values.
+- The WRP bits of the bootloader area are always set.
+
+The new values take effect after a reset. The bootloader resets the MCU
+after the command and stays in bootloader mode. The host then connects
+again.
+
+The bootloader does not change the option bytes when readout protection
+(RDP) is active. On the STM32F1, the write of RDP `0xA5` then starts a
+mass erase of the full flash, also of the bootloader. Write Protect and
+Write Unprotect then get a NACK, and the bootloader runs without the
+self-protection.
+
+A power loss during the option byte update erases all option bytes. After
+the erase, RDP is `0xFF`, which is readout protection. The bootloader
+still runs, but it cannot change the option bytes. The write protection is
+removed. Only a debug probe can remove the readout protection, for example
+with OpenOCD `stm32f1x unlock 0`. This also erases all of the flash: write
+the bootloader and the application again.
+
+The bootloader keeps the USER byte. If the USER byte selects the hardware
+watchdog (`WDG_SW` = 0), the bootloader reloads the watchdog in its main
+loop.
+
+### Update the bootloader
+
+To write a new bootloader, use a debug probe (SWD). Remove the write
+protection first. For example, with OpenOCD and an ST-Link:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+    -c "init; reset halt; stm32f1x unlock 0; reset halt; exit"
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+    -c "program build/mini/versaloon-bootloader-mini.hex verify reset exit"
+```
+
+`stm32f1x unlock 0` erases the option bytes and removes all write
+protection. The change takes effect after a reset. If the write fails
+after the unlock, disconnect the power for some seconds and try again.
+At its first start, the new bootloader protects its area again.
+
+The application stays in the flash. Write it again only when the layout
+changes, for example from the legacy layout.
 
 ## Application image header
 
 Each application image has a header with a CRC (cyclic redundancy check).
-The header is for the rewrite of the bootloader (issue #4). The rewritten
-bootloader will start only an application with a valid header (issue
-#10). Thus a half-written application will not start. The current
-bootloader ignores the header, so a stamped image also runs behind it.
+The bootloader starts only an application with a valid header. Thus a
+blank or half-written application does not start: the board stays in the
+bootloader. An image without the header also stays in the bootloader. The
+legacy bootloader ignores the header, so a stamped image also runs behind
+it.
+
+The bootloader calculates the CRC with the CRC unit of the STM32F1, at
+each start. 56 KB take some ms.
 
 The header uses the reserved words of the Cortex-M3 vector table, at the
 start of the application:
@@ -180,7 +299,8 @@ are in `tests/vectors/crc32-stm32.txt`.
 An application is valid when all of these rules are true:
 
 - The magic is correct.
-- The length is between 64 bytes and the size of the application area.
+- The length is a multiple of 4, between 64 bytes and the size of the
+  application area.
 - The CRC is correct.
 - The initial stack pointer (word `0x00`) is in RAM.
 - The reset vector (word `0x04`) is odd and inside the image.
@@ -191,12 +311,11 @@ An application is valid when all of these rules are true:
 Python 3.7 or later and `arm-none-eabi-objcopy`, and no other packages.
 
 ```sh
-tools/vsl-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 55296
+tools/vsl-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 57344
 ```
 
-The examples use the current layout: the application starts at
-`0x08002800`. The application area of an STM32F103x8 (64 KB flash) is
-55296 bytes (54 KB).
+The application starts at `0x08002000`. The application area of an
+STM32F103x8 (64 KB flash) is 57344 bytes (56 KB).
 
 - The tool writes the header into the `.isr_vector` section of the ELF
   file. Thus an image that a debug probe writes also has the header.
@@ -218,7 +337,7 @@ To check a binary image or a flash dump, use `--check`. Set `--base` to
 the application start address:
 
 ```sh
-tools/vsl-stamp-image.py --check app.bin --base 0x08002800
+tools/vsl-stamp-image.py --check app.bin --base 0x08002000
 ```
 
 ### CMake
@@ -227,7 +346,7 @@ A CMake project adds the header with a post-build step:
 
 ```cmake
 include(<versaloon-bootloader>/cmake/VslStampImage.cmake)
-vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 55296)
+vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 57344)
 ```
 
 `BIN`, `HEX` and `MAX_LENGTH` are optional.
@@ -279,14 +398,18 @@ After the reset, the bootloader reads `BKP->DR1`. If the value is
 This is the same behavior as with the key down. The next reset without a
 request starts the application again.
 
-The bootloader checks the request after the clock and USB setup, before
-it reads the key. A system reset does not clear `BKP->DR1`. A power-up
-clears `BKP->DR1` only when the backup domain (VBAT) had no power.
+The bootloader checks the request straight after the reset, before it
+reads the key (see [Start-up](#start-up)). A system reset does not clear
+`BKP->DR1`. A power-up clears `BKP->DR1` only when the backup domain
+(VBAT) had no power.
 
-### Deprecated: `entryFromProgram()`
+The bootloader also uses these backup registers. An application must not
+use them:
 
-An application can also call `entryFromProgram()` in the bootloader. This
-function is deprecated. Its address changes with the linker script and the
-device density. It also starts with the hardware state of the application,
-so the host does not always see a USB disconnect. Use the boot request in
-`BKP->DR1` instead.
+| Register | Use |
+|---|---|
+| `BKP->DR2` | GO token: start the application after the reset |
+| `BKP->DR3` | The bootloader tried to protect its area before the last reset |
+
+The legacy functions `entryFromProgram()` and the reset with a magic
+number in RAM are removed. Use the boot request in `BKP->DR1`.
