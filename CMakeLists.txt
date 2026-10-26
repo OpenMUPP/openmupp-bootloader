@@ -46,10 +46,11 @@ if(VSL_HOST_TESTS OR NOT CMAKE_CROSSCOMPILING)
     add_subdirectory(tests)
 else()
     # Boards to build, with the crystal frequency of each board.
-    set(VSL_BOARDS mini otheruse stlinkv2)
+    set(VSL_BOARDS mini otheruse stlinkv2 stlinkv2miniclone)
     set(_hse_mini 12000000)
     set(_hse_otheruse 12000000)
     set(_hse_stlinkv2 8000000)
+    set(_hse_stlinkv2miniclone 8000000)
     set(BOARD "" CACHE STRING "Board to build for: ${VSL_BOARDS} (overrides VERSALOON_BOOTLOADER_BOARDS)")
     set_property(CACHE BOARD PROPERTY STRINGS "" ${VSL_BOARDS})
 

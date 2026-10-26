@@ -27,6 +27,12 @@
       "cacheVariables": { "BOARD": "stlinkv2" }
     },
     {
+      "name": "stlinkv2miniclone",
+      "displayName": "ST-Link/V2 mini clone",
+      "inherits": "base",
+      "cacheVariables": { "BOARD": "stlinkv2miniclone" }
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "binaryDir": "${sourceDir}/build/${presetName}",
@@ -37,6 +43,7 @@
     { "name": "mini", "configurePreset": "mini" },
     { "name": "otheruse", "configurePreset": "otheruse" },
     { "name": "stlinkv2", "configurePreset": "stlinkv2" },
+    { "name": "stlinkv2miniclone", "configurePreset": "stlinkv2miniclone" },
     { "name": "host-tests", "configurePreset": "host-tests" }
   ],
   "testPresets": [
