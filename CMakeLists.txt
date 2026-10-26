@@ -45,8 +45,11 @@ if(VSL_HOST_TESTS OR NOT CMAKE_CROSSCOMPILING)
     enable_testing()
     add_subdirectory(tests)
 else()
-    # Boards to build.
-    set(VSL_BOARDS mini otheruse)
+    # Boards to build, with the crystal frequency of each board.
+    set(VSL_BOARDS mini otheruse stlinkv2)
+    set(_hse_mini 12000000)
+    set(_hse_otheruse 12000000)
+    set(_hse_stlinkv2 8000000)
     set(BOARD "" CACHE STRING "Board to build for: ${VSL_BOARDS} (overrides VERSALOON_BOOTLOADER_BOARDS)")
     set_property(CACHE BOARD PROPERTY STRINGS "" ${VSL_BOARDS})
 
@@ -59,6 +62,25 @@ else()
     endif()
 
     message(STATUS "Cross-compiling versaloon-bootloader for Cortex-M3 (boards: ${_boards_to_build})")
+
+    foreach(_board IN LISTS _boards_to_build)
+        if(NOT _board IN_LIST VSL_BOARDS)
+            message(FATAL_ERROR
+                "Unknown board '${_board}'. Use one of: ${VSL_BOARDS}")
+        endif()
+    endforeach()
+
+    # system-stm32 is built one time, with one HSE_VALUE: all boards of a
+    # build must have the same crystal.
+    list(GET _boards_to_build 0 _first_board)
+    set(_hse ${_hse_${_first_board}})
+    foreach(_board IN LISTS _boards_to_build)
+        if(NOT _hse_${_board} EQUAL _hse)
+            message(FATAL_ERROR
+                "The boards ${_first_board} and ${_board} have different crystals. "
+                "Build them in separate build directories (BOARD=<board>).")
+        endif()
+    endforeach()
 
     # system-stm32 gets its compile flags from the target art-build-config
     # (the name comes from libArT). A parent project with its own copy of
@@ -99,11 +121,11 @@ else()
     include(BuildConfig)
     art_setup_build_config(art-build-config)
 
-    # Settings of system-stm32. Both boards have a 12 MHz crystal. FORCE: the
-    # bootloader supports only this part.
+    # Settings of system-stm32. FORCE: the bootloader supports only this part,
+    # and the crystal comes from the board.
     set(STM32_FAMILY "STM32F1" CACHE STRING "" FORCE)
     set(STM32_DEVICE "STM32F103xB" CACHE STRING "" FORCE)
-    set(SYSTEM_STM32_HSE_VALUE "12000000" CACHE STRING "" FORCE)
+    set(SYSTEM_STM32_HSE_VALUE "${_hse}" CACHE STRING "" FORCE)
     # EXCLUDE_FROM_ALL: the bootloader targets build the library objects they
     # need. The install rules of system-stm32 (headers, CMake package) are not
     # part of the install step of the bootloader.
@@ -124,11 +146,6 @@ else()
         "${CMAKE_CURRENT_LIST_DIR}/src/usb/UsbCdc.cpp")
 
     foreach(_board IN LISTS _boards_to_build)
-        if(NOT _board IN_LIST VSL_BOARDS)
-            message(FATAL_ERROR
-                "Unknown board '${_board}'. Use one of: ${VSL_BOARDS}")
-        endif()
-
         string(TOUPPER "${_board}" _board_upper)
         set(_target versaloon-bootloader-${_board})
 

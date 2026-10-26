@@ -28,11 +28,15 @@ void settle() {
 }
 
 bool keyDown() {
-   RCC->APB2ENR |= board::key.clockBit();
-   board::key.set(false);
-   board::key.configure(board::Pin::inputPull);
-   settle();
-   return board::key.active();
+   if constexpr(!board::key) {
+      return false;
+   } else {
+      RCC->APB2ENR |= board::key->clockBit();
+      board::key->set(false);
+      board::key->configure(board::Pin::inputPull);
+      settle();
+      return board::key->active();
+   }
 }
 
 [[noreturn]] void startApplication() {
@@ -40,9 +44,11 @@ bool keyDown() {
    // reset of the calculation gives the reset value of CRC_DR.
    CRC->CR = CRC_CR_RESET;
    RCC->AHBENR &= ~RCC_AHBENR_CRCEN;
-   RCC->APB2RSTR = board::key.clockBit();
-   RCC->APB2RSTR = 0;
-   RCC->APB2ENR &= ~board::key.clockBit();
+   if constexpr(board::key) {
+      RCC->APB2RSTR = board::key->clockBit();
+      RCC->APB2RSTR = 0;
+      RCC->APB2ENR &= ~board::key->clockBit();
+   }
    RCC->APB1ENR &= ~decisionApb1Clocks;
 
    const uint32_t *vectors = reinterpret_cast<const uint32_t *>(layout::applicationStart);

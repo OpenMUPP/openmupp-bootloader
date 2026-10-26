@@ -1,7 +1,8 @@
 #pragma once
 
 // The pins of the bootloader (plan section 3.5): the key, the LED and the
-// USB D+ pull-up. They are the same pins as in versaloon-next-gen
+// USB D+ pull-up. A board without a key or a pull-up switch has
+// std::nullopt. They are the same pins as in versaloon-next-gen
 // (src/board/boards/). The bootloader has its own small table, because
 // versaloon-next-gen depends on the bootloader and not the other way.
 //
@@ -10,6 +11,7 @@
 
 #include <cmsis_device.h>
 #include <cstdint>
+#include <optional>
 
 namespace board {
 
@@ -21,6 +23,7 @@ struct Pin {
 
    // CNF and MODE fields of GPIOx_CRL/CRH (RM0008, section 9.2.1).
    static constexpr uint32_t outputPushPull2MHz = 0x2;
+   static constexpr uint32_t inputFloating = 0x4;
    static constexpr uint32_t inputPull = 0x8;
 
    GPIO_TypeDef *port() const {
@@ -50,19 +53,30 @@ struct Pin {
    }
 };
 
+#if defined(BOARD_MINI) || defined(BOARD_OTHERUSE)
 // Key: PB9, low when pressed. The internal pull-up holds it high.
-constexpr Pin key{ GPIOB_BASE, 9, false };
+constexpr std::optional<Pin> key = Pin{ GPIOB_BASE, 9, false };
 
 // Red LED: PA15, on when low. PA15 is JTDI after the reset: the bootloader
 // disables the JTAG-DP (SWD stays on) to use it.
 constexpr Pin led{ GPIOA_BASE, 15, false };
+#endif
 
 #if defined(BOARD_MINI)
-constexpr Pin usbPullUp{ GPIOC_BASE, 13, true };
+constexpr std::optional<Pin> usbPullUp = Pin{ GPIOC_BASE, 13, true };
 #elif defined(BOARD_OTHERUSE)
-constexpr Pin usbPullUp{ GPIOA_BASE, 2, true };
+constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 2, true };
+#elif defined(BOARD_STLINKV2)
+// ST-Link/V2 and its clones: no key, and a fixed 1.5 kOhm pull-up on D+.
+// Not tested on hardware: the pins come from versaloon-next-gen.
+constexpr std::optional<Pin> key = std::nullopt;
+constexpr Pin led{ GPIOA_BASE, 9, true };
+constexpr std::optional<Pin> usbPullUp = std::nullopt;
 #else
-#error "No board selected: define BOARD_MINI or BOARD_OTHERUSE"
+#error "No board selected: define BOARD_MINI, BOARD_OTHERUSE or BOARD_STLINKV2"
 #endif
+
+// USB D+. With a fixed pull-up, D+ low shows a disconnect to the host.
+constexpr Pin usbDp{ GPIOA_BASE, 12, true };
 
 } // namespace board
