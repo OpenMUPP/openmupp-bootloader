@@ -151,9 +151,11 @@ ctest --preset host-tests
 
 ## Use
 
-1. Hold the key (PB9) down and reset the board. The ST-Link/V2 has no key. An application can also
+1. Hold the key (PB9) down and reset the board. An application can also
    send a boot request, see
    [Start the bootloader from the application](#start-the-bootloader-from-the-application).
+   The ST-Link/V2 has no key: it starts the bootloader only with a boot
+   request, or when the application is not valid.
 2. The bootloader starts and the LED comes on. The LED
    flickers when there is USB traffic.
 3. Write a stamped application image (see
