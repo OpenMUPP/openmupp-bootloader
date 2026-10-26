@@ -5,8 +5,8 @@
 //
 // 1. Write-protects the bootloader area, if a WRP bit of it is clear
 //    (plan section 3.6). This needs a reset.
-// 2. Sets the clock to 72 MHz from the 12 MHz crystal, and starts the USB
-//    CDC device (usb/UsbCdc.h).
+// 2. Sets the clock to 72 MHz from the crystal (HSE_VALUE), and starts the
+//    USB CDC device (usb/UsbCdc.h).
 // 3. Runs the AN3155 protocol (protocol/An3155Protocol.h) on the CDC port.
 //    The main loop polls the USB device; there is no USB interrupt.
 //
@@ -150,7 +150,7 @@ extern "C" void BusFault_Handler() __attribute__((alias("HardFault_Handler")));
 extern "C" void UsageFault_Handler() __attribute__((alias("HardFault_Handler")));
 
 void os_startup_initialize_hardware() {
-   const bool clockOk = Rcc::setClock72MhzHSE(12'000'000);
+   const bool clockOk = Rcc::setClock72MhzHSE();
    SystemCoreClockUpdate();
    SysTick_Config(SystemCoreClock / 1000);
 
