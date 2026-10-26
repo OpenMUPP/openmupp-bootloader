@@ -10,7 +10,7 @@
 // 3. Runs the AN3155 protocol (protocol/An3155Protocol.h) on the CDC port.
 //    The main loop polls the USB device; there is no USB interrupt.
 //
-// The red LED is on in bootloader mode, and flickers on USB activity.
+// The LED is on in bootloader mode, and flickers on USB activity.
 
 #include <cmsis_device.h>
 #include <peripherals/Rcc.h>
@@ -72,8 +72,15 @@ void reloadWatchdog() {
    IWDG->KR = 0xAAAA;
 }
 
+// Without a pull-up switch, D+ low as an output disconnects. As an input,
+// D+ belongs to the USB transceiver again.
 void setPullUp(bool on) {
-   board::usbPullUp.set(on);
+   if constexpr(board::usbPullUp) {
+      board::usbPullUp->set(on);
+   } else {
+      board::usbDp.set(on);
+      board::usbDp.configure(on ? board::Pin::inputFloating : board::Pin::outputPushPull2MHz);
+   }
 }
 
 void wait(uint32_t ms) {
@@ -91,6 +98,9 @@ void wait(uint32_t ms) {
       reloadWatchdog();
       usbcdc::poll();
    }
+   // Power down the USB peripheral: while it is on, the transceiver drives
+   // D+ and not the GPIO (RM0008, GPIO configurations for device peripherals).
+   USB->CNTR = USB_CNTR_FRES | USB_CNTR_PDWN;
    setPullUp(false);
    wait(disconnectMs);
    hw::startup::writeBackup(BKP->DR1, dr1);
@@ -154,13 +164,16 @@ void os_startup_initialize_hardware() {
    SystemCoreClockUpdate();
    SysTick_Config(SystemCoreClock / 1000);
 
-   RCC->APB2ENR |= RCC_APB2ENR_AFIOEN | board::led.clockBit() | board::usbPullUp.clockBit();
-   // PA15 (LED) is JTDI after the reset. SWD stays on.
+   RCC->APB2ENR |= RCC_APB2ENR_AFIOEN | board::led.clockBit() |
+                   (board::usbPullUp ? board::usbPullUp->clockBit() : board::usbDp.clockBit());
+   // PA15 (LED of the Mini) is JTDI after the reset. SWD stays on.
    AFIO->MAPR = (AFIO->MAPR & ~AFIO_MAPR_SWJ_CFG) | AFIO_MAPR_SWJ_CFG_JTAGDISABLE;
    board::led.set(true);
    board::led.configure(board::Pin::outputPushPull2MHz);
-   board::usbPullUp.set(false);
-   board::usbPullUp.configure(board::Pin::outputPushPull2MHz);
+   setPullUp(false);
+   if constexpr(board::usbPullUp) {
+      board::usbPullUp->configure(board::Pin::outputPushPull2MHz);
+   }
 
    // No USB without the crystal: the LED blinks and the host sees no device.
    if(!clockOk) {
@@ -184,6 +197,9 @@ int main() {
    uint8_t uid[hw::Uid::SizeBytes];
    hw::Uid::read(uid);
    Rcc::enableUSBClock();
+   // The host must see the disconnect also after a reset from the
+   // application, when no pull-up switch disconnected it.
+   wait(disconnectMs);
    usbcdc::start(uid, &setPullUp);
 
    Led led;

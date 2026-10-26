@@ -48,7 +48,7 @@ build:
   stage: build
   parallel:
     matrix:
-      - BOARD: [mini, otheruse]
+      - BOARD: [mini, otheruse, stlinkv2]
   script:
     - cd "$CI_PROJECT_DIR"
     - cmake --preset ${BOARD} -DGCC_TOOLCHAIN_PREFIX=${GCC_TOOLCHAIN_PREFIX} -DVSL_WERROR=ON
