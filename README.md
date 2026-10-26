@@ -33,15 +33,20 @@ versaloon-next-gen. Do these checks on the real board before you use it:
   [Update the bootloader](#update-the-bootloader). Connect the debug
   probe to the SWDIO and SWCLK pads of the board.
 - Some clones use a compatible MCU from another manufacturer, not an
-  STM32F103. The bootloader is not tested on these MCUs.
+  STM32F103. The bootloader is tested on one of these MCUs only (on the
+  ST-Link/V2 mini clone, see below).
 
 The ST-Link/V2 mini clone is the USB stick clone with a 2x5 header. Its
-pin map is measured (versaloon-next-gen `docs/stlinkv2-mini-clone.md`),
-but the bootloader is not tested on it yet. It has a key: the SWIM pin of
-the header. The board connects SWIM to PB7 to PB11 and has a pull-up on
-it. A wire from SWIM to GND at power-up starts the bootloader, also when
-the application is valid. Thus a broken application does not need a
-debug probe.
+pin map is measured (versaloon-next-gen `docs/stlinkv2-mini-clone.md`).
+It has a key: the SWIM pin of the header. The board connects SWIM to PB7
+to PB11 and has a pull-up on it. A wire from SWIM to GND at power-up
+starts the bootloader, also when the application is valid. Thus a broken
+application does not need a debug probe.
+
+The bootloader is tested on one mini clone. The boot request, the key,
+the D+ disconnect, and a write and GO with `stm32flash` pass. The MCU of
+that board has ST markings, but it is an STM32F103 compatible MCU, not a
+genuine STM32F103.
 
 ## Memory layout
 
