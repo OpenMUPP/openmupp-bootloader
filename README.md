@@ -12,9 +12,11 @@ with the ID `0483:5740`. It uses the STM32 serial bootloader protocol
 | Versaloon Mini (MiniRelease1) | `mini` | 12 MHz | PC13 | PA15 (red), on when low | PB9 |
 | OtherUse | `otheruse` | 12 MHz | PA2 | PA15 (red), on when low | PB9 |
 | ST-Link/V2 and clones | `stlinkv2` | 8 MHz | Fixed | PA9, on when high | None |
+| ST-Link/V2 mini clone (USB stick) | `stlinkv2miniclone` | 8 MHz | Fixed | PA9: high is blue, low is red | PB7 (SWIM) |
 
 The pull-up pin is high when the USB device is connected.
 The key is down when PB9 is low.
+On the ST-Link/V2 mini clone, the key is the SWIM pin of the header (PB7, low when down).
 The pins are the same as in versaloon-next-gen (`src/board/boards/`).
 
 The ST-Link/V2 support is not tested on hardware. Its pins come from
@@ -31,7 +33,20 @@ versaloon-next-gen. Do these checks on the real board before you use it:
   [Update the bootloader](#update-the-bootloader). Connect the debug
   probe to the SWDIO and SWCLK pads of the board.
 - Some clones use a compatible MCU from another manufacturer, not an
-  STM32F103. The bootloader is not tested on these MCUs.
+  STM32F103. The bootloader is tested on one of these MCUs only (on the
+  ST-Link/V2 mini clone, see below).
+
+The ST-Link/V2 mini clone is the USB stick clone with a 2x5 header. Its
+pin map is measured (versaloon-next-gen `docs/stlinkv2-mini-clone.md`).
+It has a key: the SWIM pin of the header. The board connects SWIM to PB7
+to PB11 and has a pull-up on it. A wire from SWIM to GND at power-up
+starts the bootloader, also when the application is valid. Thus a broken
+application does not need a debug probe.
+
+The bootloader is tested on one mini clone. The boot request, the key,
+the D+ disconnect, and a write and GO with `stm32flash` pass. The MCU of
+that board has ST markings, but it is an STM32F103 compatible MCU, not a
+genuine STM32F103.
 
 ## Memory layout
 
@@ -75,8 +90,8 @@ cmake --preset mini
 cmake --build --preset mini
 ```
 
-Use the preset `otheruse` for the OtherUse board and `stlinkv2` for the
-ST-Link/V2.
+Use the preset `otheruse` for the OtherUse board, `stlinkv2` for the
+ST-Link/V2 and `stlinkv2miniclone` for the ST-Link/V2 mini clone.
 
 The build writes these files to the build directory. A preset uses
 `build/<board>/`:
@@ -102,8 +117,8 @@ These CMake options change the build:
 
 | Option | Default | Content |
 |---|---|---|
-| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv2`). Overrides `VERSALOON_BOOTLOADER_BOARDS`. A preset selects one board. |
-| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv2` alone. |
+| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv2`, `stlinkv2miniclone`). Overrides `VERSALOON_BOOTLOADER_BOARDS`. A preset selects one board. |
+| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv2` and `stlinkv2miniclone` alone or together. |
 | `VERSALOON_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
 | `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
 | `VSL_LTO` | `ON` | Link-time optimisation |
@@ -156,6 +171,8 @@ ctest --preset host-tests
    [Start the bootloader from the application](#start-the-bootloader-from-the-application).
    The ST-Link/V2 has no key: it starts the bootloader only with a boot
    request, or when the application is not valid.
+   On the ST-Link/V2 mini clone, connect SWIM (header pin 3) to GND
+   (header pin 5), then connect the board to USB.
 2. The bootloader starts and the LED comes on. The LED
    flickers when there is USB traffic.
 3. Write a stamped application image (see

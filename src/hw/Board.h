@@ -72,8 +72,17 @@ constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 2, true };
 constexpr std::optional<Pin> key = std::nullopt;
 constexpr Pin led{ GPIOA_BASE, 9, true };
 constexpr std::optional<Pin> usbPullUp = std::nullopt;
+#elif defined(BOARD_STLINKV2MINICLONE)
+// ST-Link/V2 mini clone (USB stick, pin map measured, see versaloon-next-gen
+// docs/stlinkv2-mini-clone.md). The key is the SWIM pin of the header:
+// PB7-PB11 are tied to it and have a pull-up on the board. A wire from
+// SWIM (pin 3) to GND (pin 5) at power-up starts the bootloader.
+constexpr std::optional<Pin> key = Pin{ GPIOB_BASE, 7, false };
+// Two LEDs on PA9: high lights the blue LED, low the red LED.
+constexpr Pin led{ GPIOA_BASE, 9, true };
+constexpr std::optional<Pin> usbPullUp = std::nullopt;
 #else
-#error "No board selected: define BOARD_MINI, BOARD_OTHERUSE or BOARD_STLINKV2"
+#error "No board selected: define BOARD_MINI, BOARD_OTHERUSE, BOARD_STLINKV2 or BOARD_STLINKV2MINICLONE"
 #endif
 
 // USB D+. With a fixed pull-up, D+ low shows a disconnect to the host.
