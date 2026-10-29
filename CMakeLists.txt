@@ -15,9 +15,9 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 option(VSL_WERROR "Treat compiler warnings in the bootloader sources as errors" OFF)
 
 # The bootloader uses the first 8 KB of the flash. The application starts
-# at 0x08002000. The linker script (ld/mem.ld.in), the size check and the
-# code (src/Layout.h) use this value. The write protection works on 4 KB
-# groups, so the size is a multiple of 4 KB.
+# at 0x08002000. The link (__flash_length of the system-stm32 memory
+# script), the size check and the code (src/Layout.h) use this value. The
+# write protection works on 4 KB groups, so the size is a multiple of 4 KB.
 set(VERSALOON_BOOTLOADER_AREA_SIZE 8192 CACHE STRING
     "Size of the bootloader area in bytes, a multiple of 4096")
 if(NOT VERSALOON_BOOTLOADER_AREA_SIZE MATCHES "^[1-9][0-9]*$")
@@ -134,10 +134,11 @@ else()
 
     include(output_files)
 
-    # Linker script for the memory map, with the size of the bootloader area.
-    set(_ld_dir "${CMAKE_CURRENT_BINARY_DIR}/ld")
-    configure_file("${CMAKE_CURRENT_LIST_DIR}/ld/mem.ld.in" "${_ld_dir}/mem.ld" @ONLY)
-    configure_file("${CMAKE_CURRENT_LIST_DIR}/ld/sections.ld" "${_ld_dir}/sections.ld" COPYONLY)
+    # Linker scripts of system-stm32. FLASH is the bootloader area, so the
+    # link fails when the bootloader does not fit. The main stack is 2 KB,
+    # because the STM32F103 has only 20 KB RAM, and the link fails when less
+    # than the full stack is free.
+    set(_ld_dir "${VSL_SYSTEM_STM32_DIR}/ldscripts")
 
     set(_sources
         "${CMAKE_CURRENT_LIST_DIR}/src/main.cpp"
@@ -171,10 +172,13 @@ else()
         set(_map "${CMAKE_CURRENT_BINARY_DIR}/${_target}.map")
         target_link_options(${_target} PRIVATE
             ${COMMON_OPTIONS} -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments
-            "-L${_ld_dir}" -Tmem.ld -Tsections.ld
+            -Wl,--defsym=__flash_length=${VERSALOON_BOOTLOADER_AREA_SIZE}
+            -Wl,--defsym=__main_stack_size=2048
+            -Wl,--defsym=__minimum_stack_size=2048
+            "-L${_ld_dir}" -Tmem-F103x8.ld -Tlibs.ld -Tsections.ld
             "-Wl,-Map,${_map}")
         set_property(TARGET ${_target} APPEND PROPERTY LINK_DEPENDS
-            "${_ld_dir}/mem.ld" "${_ld_dir}/sections.ld")
+            "${_ld_dir}/mem-F103x8.ld" "${_ld_dir}/libs.ld" "${_ld_dir}/sections.ld")
         set_property(TARGET ${_target} APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${_map}")
 
         ADD_DUMP_TARGET(${_target})
