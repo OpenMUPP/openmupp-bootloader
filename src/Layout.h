@@ -3,7 +3,7 @@
 // Flash layout of the rewritten bootloader (issue #4). The bootloader area
 // is at the start of the flash; the application starts behind it.
 //
-// The area size comes from CMake (VERSALOON_BOOTLOADER_AREA_SIZE), so the
+// The area size comes from CMake (OPENMUPP_BOOTLOADER_AREA_SIZE), so the
 // code, the linker script and the size check use the same value.
 // No hardware access: the host tests use this header too.
 

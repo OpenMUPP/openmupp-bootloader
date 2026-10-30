@@ -1,6 +1,6 @@
 # Adds the versaloon application image header to an ELF target.
 #
-#   include(<versaloon-bootloader>/cmake/VslStampImage.cmake)
+#   include(<openmupp-bootloader>/cmake/VslStampImage.cmake)
 #   vsl_stamp_image(<target> [BIN <file>] [HEX <file>] [MAX_LENGTH <bytes>])
 #
 # A post-build step runs tools/vsl-stamp-image.py. It writes the header into
