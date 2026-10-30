@@ -1,9 +1,12 @@
-# Versaloon bootloader
+# OpenMUPP bootloader
 
-USB bootloader for Versaloon boards with an STM32F103 microcontroller.
+USB bootloader for the OpenMUPP firmware (Open Multi-architecture Universal
+Programmer & Probe) on boards with an STM32F103 microcontroller.
 The bootloader shows a USB CDC (Communication Device Class) serial port
 with the ID `0483:5740`. It uses the STM32 serial bootloader protocol
 (ST AN3155), so `stm32flash` can program the application.
+
+The old name of this project is versaloon-bootloader.
 
 ## Boards
 
@@ -17,10 +20,10 @@ with the ID `0483:5740`. It uses the STM32 serial bootloader protocol
 The pull-up pin is high when the USB device is connected.
 The key is down when PB9 is low.
 On the ST-Link/V2 mini clone, the key is the SWIM pin of the header (PB7, low when down).
-The pins are the same as in versaloon-next-gen (`src/board/boards/`).
+The pins are the same as in OpenMUPP (`src/board/boards/`).
 
 The ST-Link/V2 support is not tested on hardware. Its pins come from
-versaloon-next-gen. Do these checks on the real board before you use it:
+OpenMUPP. Do these checks on the real board before you use it:
 
 - The ST-Link/V2 has no switch for the D+ pull-up. To show a disconnect
   to the host, the bootloader sets D+ (PA12) low for 20 ms.
@@ -37,7 +40,7 @@ versaloon-next-gen. Do these checks on the real board before you use it:
   ST-Link/V2 mini clone, see below).
 
 The ST-Link/V2 mini clone is the USB stick clone with a 2x5 header. Its
-pin map is measured (versaloon-next-gen `docs/stlinkv2-mini-clone.md`).
+pin map is measured (OpenMUPP `docs/stlinkv2-mini-clone.md`).
 It has a key: the SWIM pin of the header. The board connects SWIM to PB7
 to PB11 and has a pull-up on it. A wire from SWIM to GND at power-up
 starts the bootloader, also when the application is valid. Thus a broken
@@ -96,10 +99,10 @@ ST-Link/V2 and `stlinkv2miniclone` for the ST-Link/V2 mini clone.
 The build writes these files to the build directory. A preset uses
 `build/<board>/`:
 
-- `versaloon-bootloader-<board>.elf`
-- `versaloon-bootloader-<board>.hex`
-- `versaloon-bootloader-<board>.bin`
-- `versaloon-bootloader-<board>.map`
+- `openmupp-bootloader-<board>.elf`
+- `openmupp-bootloader-<board>.hex`
+- `openmupp-bootloader-<board>.bin`
+- `openmupp-bootloader-<board>.map`
 
 The build fails when the image is larger than the bootloader area
 (8 KB). In that case the build removes the image files. The image is
@@ -117,9 +120,9 @@ These CMake options change the build:
 
 | Option | Default | Content |
 |---|---|---|
-| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv2`, `stlinkv2miniclone`). Overrides `VERSALOON_BOOTLOADER_BOARDS`. A preset selects one board. |
-| `VERSALOON_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv2` and `stlinkv2miniclone` alone or together. |
-| `VERSALOON_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
+| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv2`, `stlinkv2miniclone`). Overrides `OPENMUPP_BOOTLOADER_BOARDS`. A preset selects one board. |
+| `OPENMUPP_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv2` and `stlinkv2miniclone` alone or together. |
+| `OPENMUPP_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
 | `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
 | `VSL_LTO` | `ON` | Link-time optimisation |
 | `VSL_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
@@ -135,9 +138,9 @@ cmake --build build/mini
 
 ### Use in a parent project
 
-A parent project (for example versaloon-next-gen) builds this repository
+A parent project (for example OpenMUPP) builds this repository
 with `ExternalProject`. Pass `CMAKE_TOOLCHAIN_FILE` and
-`VERSALOON_BOOTLOADER_BOARDS` in `CMAKE_ARGS`. The install step copies
+`OPENMUPP_BOOTLOADER_BOARDS` in `CMAKE_ARGS`. The install step copies
 the `.elf`, `.hex` and `.bin` files of each board to
 `CMAKE_INSTALL_PREFIX`. The same files are in the build directory of the
 external project.
@@ -287,7 +290,7 @@ protection first. For example, with OpenOCD and an ST-Link:
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
     -c "init; reset halt; stm32f1x unlock 0; reset halt; exit"
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-    -c "program build/mini/versaloon-bootloader-mini.hex verify reset exit"
+    -c "program build/mini/openmupp-bootloader-mini.hex verify reset exit"
 ```
 
 `stm32f1x unlock 0` erases the option bytes and removes all write
@@ -381,7 +384,7 @@ tools/vsl-stamp-image.py --check app.bin --base 0x08002000
 A CMake project adds the header with a post-build step:
 
 ```cmake
-include(<versaloon-bootloader>/cmake/VslStampImage.cmake)
+include(<openmupp-bootloader>/cmake/VslStampImage.cmake)
 vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 57344)
 ```
 

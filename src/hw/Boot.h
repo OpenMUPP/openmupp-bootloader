@@ -8,7 +8,7 @@
 // start the application, it sets the peripherals that the decision used
 // back to their reset state and jumps to the application. The application
 // thus starts in the reset state, with all interrupts masked (PRIMASK
-// set), as versaloon-next-gen expects (docs/firmware-update.md).
+// set), as OpenMUPP expects (docs/firmware-update.md).
 //
 // The decision leaves the clocks of PWR, BKP and CRC on in bootloader
 // mode. The functions below use them.

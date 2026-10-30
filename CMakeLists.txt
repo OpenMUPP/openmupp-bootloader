@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(versaloon-bootloader LANGUAGES C CXX ASM)
+project(openmupp-bootloader LANGUAGES C CXX ASM)
 
 # Add our CMAKE modules folder
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -18,21 +18,21 @@ option(VSL_WERROR "Treat compiler warnings in the bootloader sources as errors" 
 # at 0x08002000. The link (__flash_length of the system-stm32 memory
 # script), the size check and the code (src/Layout.h) use this value. The
 # write protection works on 4 KB groups, so the size is a multiple of 4 KB.
-set(VERSALOON_BOOTLOADER_AREA_SIZE 8192 CACHE STRING
+set(OPENMUPP_BOOTLOADER_AREA_SIZE 8192 CACHE STRING
     "Size of the bootloader area in bytes, a multiple of 4096")
-if(NOT VERSALOON_BOOTLOADER_AREA_SIZE MATCHES "^[1-9][0-9]*$")
+if(NOT OPENMUPP_BOOTLOADER_AREA_SIZE MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR
-        "VERSALOON_BOOTLOADER_AREA_SIZE must be a size in bytes, got '${VERSALOON_BOOTLOADER_AREA_SIZE}'")
+        "OPENMUPP_BOOTLOADER_AREA_SIZE must be a size in bytes, got '${OPENMUPP_BOOTLOADER_AREA_SIZE}'")
 endif()
-math(EXPR _area_rest "${VERSALOON_BOOTLOADER_AREA_SIZE} % 4096")
+math(EXPR _area_rest "${OPENMUPP_BOOTLOADER_AREA_SIZE} % 4096")
 if(NOT _area_rest EQUAL 0)
     message(FATAL_ERROR
-        "VERSALOON_BOOTLOADER_AREA_SIZE (${VERSALOON_BOOTLOADER_AREA_SIZE}) must be a multiple of 4096")
+        "OPENMUPP_BOOTLOADER_AREA_SIZE (${OPENMUPP_BOOTLOADER_AREA_SIZE}) must be a multiple of 4096")
 endif()
 
 add_library(vsl-layout INTERFACE)
 target_compile_definitions(vsl-layout INTERFACE
-    VSL_BOOTLOADER_AREA_SIZE=${VERSALOON_BOOTLOADER_AREA_SIZE})
+    VSL_BOOTLOADER_AREA_SIZE=${OPENMUPP_BOOTLOADER_AREA_SIZE})
 
 # When not cross-compiling, or when explicitly requested via VSL_HOST_TESTS,
 # build the host unit tests instead of the bootloader images.
@@ -51,18 +51,18 @@ else()
     set(_hse_otheruse 12000000)
     set(_hse_stlinkv2 8000000)
     set(_hse_stlinkv2miniclone 8000000)
-    set(BOARD "" CACHE STRING "Board to build for: ${VSL_BOARDS} (overrides VERSALOON_BOOTLOADER_BOARDS)")
+    set(BOARD "" CACHE STRING "Board to build for: ${VSL_BOARDS} (overrides OPENMUPP_BOOTLOADER_BOARDS)")
     set_property(CACHE BOARD PROPERTY STRINGS "" ${VSL_BOARDS})
 
-    set(VERSALOON_BOOTLOADER_BOARDS "mini;otheruse" CACHE STRING "Boards to build: ${VSL_BOARDS}")
+    set(OPENMUPP_BOOTLOADER_BOARDS "mini;otheruse" CACHE STRING "Boards to build: ${VSL_BOARDS}")
 
     if(BOARD)
         set(_boards_to_build ${BOARD})
     else()
-        set(_boards_to_build ${VERSALOON_BOOTLOADER_BOARDS})
+        set(_boards_to_build ${OPENMUPP_BOOTLOADER_BOARDS})
     endif()
 
-    message(STATUS "Cross-compiling versaloon-bootloader for Cortex-M3 (boards: ${_boards_to_build})")
+    message(STATUS "Cross-compiling openmupp-bootloader for Cortex-M3 (boards: ${_boards_to_build})")
 
     foreach(_board IN LISTS _boards_to_build)
         if(NOT _board IN_LIST VSL_BOARDS)
@@ -95,7 +95,7 @@ else()
     endif()
 
     # The source of system-stm32. The default is the submodule. A parent
-    # project (versaloon-next-gen) passes its own copy, so both projects use
+    # project (OpenMUPP) passes its own copy, so both projects use
     # the same library commit.
     set(VSL_SYSTEM_STM32_DIR "${CMAKE_CURRENT_LIST_DIR}/dependencies/system-stm32" CACHE PATH
         "Source directory of system-stm32")
@@ -149,7 +149,7 @@ else()
 
     foreach(_board IN LISTS _boards_to_build)
         string(TOUPPER "${_board}" _board_upper)
-        set(_target versaloon-bootloader-${_board})
+        set(_target openmupp-bootloader-${_board})
 
         add_executable(${_target} ${_sources})
         set_target_properties(${_target} PROPERTIES
@@ -172,7 +172,7 @@ else()
         set(_map "${CMAKE_CURRENT_BINARY_DIR}/${_target}.map")
         target_link_options(${_target} PRIVATE
             ${COMMON_OPTIONS} -nostartfiles -Wl,--gc-sections -Wl,--no-warn-rwx-segments
-            -Wl,--defsym=__flash_length=${VERSALOON_BOOTLOADER_AREA_SIZE}
+            -Wl,--defsym=__flash_length=${OPENMUPP_BOOTLOADER_AREA_SIZE}
             -Wl,--defsym=__main_stack_size=2048
             -Wl,--defsym=__minimum_stack_size=2048
             "-L${_ld_dir}" -Tmem-F103x8.ld -Tlibs.ld -Tsections.ld
@@ -190,7 +190,7 @@ else()
             COMMAND "${CMAKE_OBJCOPY}" -O binary "$<TARGET_FILE:${_target}>" "${_out}.bin"
             COMMAND "${CMAKE_COMMAND}" -DIMAGE=${_out}.bin
                     "-DREMOVE_ON_FAIL=${_out}.hex$<SEMICOLON>$<TARGET_FILE:${_target}>"
-                    -DMAX_SIZE=${VERSALOON_BOOTLOADER_AREA_SIZE}
+                    -DMAX_SIZE=${OPENMUPP_BOOTLOADER_AREA_SIZE}
                     -P "${CMAKE_CURRENT_LIST_DIR}/cmake/check-size.cmake"
             BYPRODUCTS "${_out}.hex" "${_out}.bin"
             VERBATIM)

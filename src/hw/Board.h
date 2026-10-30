@@ -2,9 +2,9 @@
 
 // The pins of the bootloader (plan section 3.5): the key, the LED and the
 // USB D+ pull-up. A board without a key or a pull-up switch has
-// std::nullopt. They are the same pins as in versaloon-next-gen
+// std::nullopt. They are the same pins as in OpenMUPP
 // (src/board/boards/). The bootloader has its own small table, because
-// versaloon-next-gen depends on the bootloader and not the other way.
+// OpenMUPP depends on the bootloader and not the other way.
 //
 // The functions write the GPIO registers directly. The boot decision uses
 // them before the start-up code initialises the RAM.
@@ -68,12 +68,12 @@ constexpr std::optional<Pin> usbPullUp = Pin{ GPIOC_BASE, 13, true };
 constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 2, true };
 #elif defined(BOARD_STLINKV2)
 // ST-Link/V2 and its clones: no key, and a fixed 1.5 kOhm pull-up on D+.
-// Not tested on hardware: the pins come from versaloon-next-gen.
+// Not tested on hardware: the pins come from OpenMUPP.
 constexpr std::optional<Pin> key = std::nullopt;
 constexpr Pin led{ GPIOA_BASE, 9, true };
 constexpr std::optional<Pin> usbPullUp = std::nullopt;
 #elif defined(BOARD_STLINKV2MINICLONE)
-// ST-Link/V2 mini clone (USB stick, pin map measured, see versaloon-next-gen
+// ST-Link/V2 mini clone (USB stick, pin map measured, see OpenMUPP
 // docs/stlinkv2-mini-clone.md). The key is the SWIM pin of the header:
 // PB7-PB11 are tied to it and have a pull-up on the board. A wire from
 // SWIM (pin 3) to GND (pin 5) at power-up starts the bootloader.

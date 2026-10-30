@@ -17,7 +17,7 @@
 
 namespace boot {
 
-// Written by the application (versaloon-next-gen VERSALOON_FW_UPDATE) to
+// Written by the application (OpenMUPP VERSALOON_FW_UPDATE) to
 // start the bootloader. It is part of the bootloader contract.
 constexpr uint16_t bootRequest = 0xB007;
 
