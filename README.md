@@ -123,10 +123,10 @@ These CMake options change the build:
 | `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv2`, `stlinkv2miniclone`). Overrides `OPENMUPP_BOOTLOADER_BOARDS`. A preset selects one board. |
 | `OPENMUPP_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv2` and `stlinkv2miniclone` alone or together. |
 | `OPENMUPP_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
-| `VSL_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
-| `VSL_LTO` | `ON` | Link-time optimisation |
-| `VSL_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
-| `VSL_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images, see [Host tests](#host-tests) |
+| `MUPP_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
+| `MUPP_LTO` | `ON` | Link-time optimisation |
+| `MUPP_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
+| `MUPP_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images, see [Host tests](#host-tests) |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
 Without a preset, configure and build for one board:
@@ -145,7 +145,7 @@ the `.elf`, `.hex` and `.bin` files of each board to
 `CMAKE_INSTALL_PREFIX`. The same files are in the build directory of the
 external project.
 
-Pass `VSL_SYSTEM_STM32_DIR` with the `system-stm32` directory of the
+Pass `MUPP_SYSTEM_STM32_DIR` with the `system-stm32` directory of the
 parent project. Then the two projects use the same library commit, and
 the parent does not need the nested submodule. Without it, the parent
 must check out the submodules recursively.
@@ -346,11 +346,11 @@ An application is valid when all of these rules are true:
 
 ### Stamp tool
 
-`tools/vsl-stamp-image.py` adds the header to an ELF image. It needs
+`tools/mupp-stamp-image.py` adds the header to an ELF image. It needs
 Python 3.7 or later and `arm-none-eabi-objcopy`, and no other packages.
 
 ```sh
-tools/vsl-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 57344
+tools/mupp-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 57344
 ```
 
 The application starts at `0x08002000`. The application area of an
@@ -376,7 +376,7 @@ To check a binary image or a flash dump, use `--check`. Set `--base` to
 the application start address:
 
 ```sh
-tools/vsl-stamp-image.py --check app.bin --base 0x08002000
+tools/mupp-stamp-image.py --check app.bin --base 0x08002000
 ```
 
 ### CMake
@@ -384,17 +384,17 @@ tools/vsl-stamp-image.py --check app.bin --base 0x08002000
 A CMake project adds the header with a post-build step:
 
 ```cmake
-include(<openmupp-bootloader>/cmake/VslStampImage.cmake)
-vsl_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 57344)
+include(<openmupp-bootloader>/cmake/MuppStampImage.cmake)
+mupp_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 57344)
 ```
 
 `BIN`, `HEX` and `MAX_LENGTH` are optional.
 
-Use the `BIN` and `HEX` files of `vsl_stamp_image()` to program the
+Use the `BIN` and `HEX` files of `mupp_stamp_image()` to program the
 application. Do not make the `.bin` or `.hex` file with a separate `objcopy`
 step. `objcopy -O binary` fills the gaps between sections with `0x00`, so
 the CRC is not correct. If a separate step is necessary, add
-`--gap-fill 0xff` and run it after `vsl_stamp_image()`. Post-build steps
+`--gap-fill 0xff` and run it after `mupp_stamp_image()`. Post-build steps
 run in the order of the calls.
 
 ### Tool tests

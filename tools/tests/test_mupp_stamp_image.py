@@ -1,4 +1,4 @@
-"""Tests for tools/vsl-stamp-image.py.
+"""Tests for tools/mupp-stamp-image.py.
 
 Run from the repository root:
     python3 -m unittest discover -s tools/tests
@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 VECTORS = os.path.join(ROOT, "tests", "vectors", "crc32-stm32.txt")
 
 _spec = importlib.util.spec_from_file_location(
-    "vsl_stamp_image", os.path.join(ROOT, "tools", "vsl-stamp-image.py"))
+    "mupp_stamp_image", os.path.join(ROOT, "tools", "mupp-stamp-image.py"))
 tool = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tool)
 
@@ -320,7 +320,7 @@ class ElfTest(unittest.TestCase):
 
 @unittest.skipUnless(GCC and OBJCOPY and CMAKE, "cmake or the Arm GNU toolchain not found")
 class CmakeTest(unittest.TestCase):
-    def test_vsl_stamp_image(self):
+    def test_mupp_stamp_image(self):
         with tempfile.TemporaryDirectory() as build:
             subprocess.run([CMAKE, "-S", PROJECT, "-B", build], check=True,
                            stdout=subprocess.DEVNULL)

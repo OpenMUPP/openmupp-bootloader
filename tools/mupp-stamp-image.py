@@ -13,8 +13,8 @@ The tool writes the header into the .isr_vector section of the ELF file
 .hex. The bootloader starts only an application with a valid header.
 
 Usage:
-    vsl-stamp-image.py <image.elf> [--bin <out.bin>] [--hex <out.hex>]
-    vsl-stamp-image.py --check <image.bin> --base <address>
+    mupp-stamp-image.py <image.elf> [--bin <out.bin>] [--hex <out.hex>]
+    mupp-stamp-image.py --check <image.bin> --base <address>
 
 Python 3.7 or later, standard library only. The ELF mode needs
 arm-none-eabi-objcopy.

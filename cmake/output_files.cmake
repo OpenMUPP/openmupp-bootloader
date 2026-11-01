@@ -1,6 +1,6 @@
 # Fall back to deriving toolchain utilities from the compiler or PATH
 # when the toolchain file does not set them.
-macro(_vsl_find_toolchain_tools)
+macro(_mupp_find_toolchain_tools)
     if(NOT CMAKE_SIZE)
         if(CMAKE_C_COMPILER MATCHES "gcc(\\.exe)?$")
             string(REGEX REPLACE "gcc$" "size" _size_tool "${CMAKE_C_COMPILER}")
@@ -38,10 +38,10 @@ macro(_vsl_find_toolchain_tools)
     endif()
 endmacro()
 
-_vsl_find_toolchain_tools()
+_mupp_find_toolchain_tools()
 
 FUNCTION(ADD_DUMP_TARGET TARGET)
-_vsl_find_toolchain_tools()
+_mupp_find_toolchain_tools()
 IF(EXECUTABLE_OUTPUT_PATH)
   SET(FILENAME "${EXECUTABLE_OUTPUT_PATH}/${TARGET}")
 ELSE()
@@ -55,7 +55,7 @@ ENDIF()
 ENDFUNCTION()
 
 FUNCTION(PRINT_SIZE_OF_TARGETS TARGET)
-_vsl_find_toolchain_tools()
+_mupp_find_toolchain_tools()
 IF(EXECUTABLE_OUTPUT_PATH)
   SET(FILENAME "${EXECUTABLE_OUTPUT_PATH}/${TARGET}")
 ELSE()
