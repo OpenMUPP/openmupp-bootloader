@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Interfaces between the AN3155 protocol and the hardware (issue #8). The

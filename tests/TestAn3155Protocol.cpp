@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Unit tests of the AN3155 protocol: each command as AN3155 defines it,
 // the error replies, the timeouts and the abort in each state.
 

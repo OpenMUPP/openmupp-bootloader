@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The command sequences of stm32flash (stm32.c of stm32flash 0.7): the
 // connect, the device query, the erase, the write in 256-byte blocks, the
 // verify and the start of the application. The test plays the host side

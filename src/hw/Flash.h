@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The flash driver of the bootloader (issue #10, plan section 3.6): page

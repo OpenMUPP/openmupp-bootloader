@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The boot decision (issue #10, plan section 3.1). It runs straight after

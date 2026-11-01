@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The ST AN3155 bootloader protocol (USART protocol of the STM32 system

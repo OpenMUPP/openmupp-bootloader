@@ -452,3 +452,17 @@ use them:
 
 The legacy functions `entryFromProgram()` and the reset with a magic
 number in RAM are removed. Use the boot request in `BKP->DR1`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Copyright (C) 2026 Armin van der Togt <armin@vandertogt.org>
+
+This project is free software. You can redistribute it and modify it under the terms of the GNU General Public License, version 3 or any later version. See [LICENSE](LICENSE).
+The program has no warranty.
+
+`cmake/ClangFormat.cmake` uses the Boost Software License 1.0. See [LICENSES/BSL-1.0.txt](LICENSES/BSL-1.0.txt).
+The submodule `system-stm32` uses the MIT license. The build also downloads the CMSIS headers of Arm and ST (Apache-2.0).

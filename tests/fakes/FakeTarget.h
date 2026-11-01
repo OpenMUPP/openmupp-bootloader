@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Fakes of the hardware interfaces (protocol/Hardware.h) for the host

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // A host for the protocol in the tests: it sends bytes as the USB glue of

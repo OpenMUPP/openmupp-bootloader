@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Minimal USB CDC-ACM device for the STM32F1 USB peripheral. This is the

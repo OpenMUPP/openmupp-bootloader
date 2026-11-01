@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "hw/Boot.h"
 
 #include <cmsis_device.h>

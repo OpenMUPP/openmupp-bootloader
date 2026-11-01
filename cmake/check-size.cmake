@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Fail when an image is larger than the bootloader area. The check removes
 # the image and the files in REMOVE_ON_FAIL, so nobody can flash them.
 # Usage: cmake -DIMAGE=<file> -DMAX_SIZE=<bytes> [-DREMOVE_ON_FAIL=<list>]
