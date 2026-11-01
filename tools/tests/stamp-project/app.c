@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /* Minimal application for the stamp tool tests. The reserved vector table
  * words (0x1C-0x2B) are zero. The 64-byte aligned table makes a gap before
  * .rodata (see app.ld). .data makes the image include a load region after

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Test project for cmake/MuppStampImage.cmake. tools/tests runs it.
 cmake_minimum_required(VERSION 3.21)
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../../../cmake/arm-none-eabi.cmake")

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The pins of the bootloader (plan section 3.5): the key, the LED and the

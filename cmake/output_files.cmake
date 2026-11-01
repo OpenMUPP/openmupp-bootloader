@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Fall back to deriving toolchain utilities from the compiler or PATH
 # when the toolchain file does not set them.
 macro(_mupp_find_toolchain_tools)

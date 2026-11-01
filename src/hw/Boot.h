@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Start-up of the bootloader (issue #10, plan sections 3.1 and 3.4).

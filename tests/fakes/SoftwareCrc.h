@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Software model of the STM32F1 CRC unit for the host tests: CRC-32/MPEG-2

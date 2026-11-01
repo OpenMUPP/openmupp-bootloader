@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "protocol/An3155Protocol.h"
 
 namespace protocol {

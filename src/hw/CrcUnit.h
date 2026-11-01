@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The CRC unit of the STM32F1 (RM0008, section 4) for the image check

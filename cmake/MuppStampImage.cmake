@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Adds the versaloon application image header to an ELF target.
 #
 #   include(<openmupp-bootloader>/cmake/MuppStampImage.cmake)

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Entry point of the bootloader (issue #4).
 //
 // hw/Boot.cpp decides after the reset: start the application, or continue

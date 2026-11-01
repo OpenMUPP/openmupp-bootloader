@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Host unit tests. They build with the host compiler: use the preset
 # host-tests (MUPP_HOST_TESTS=ON), not a board preset.
 include(FetchContent)

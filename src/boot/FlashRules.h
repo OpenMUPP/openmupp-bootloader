@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Rules of the flash driver and of the self-protection (plan section 3.6).

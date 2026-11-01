@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Add the versaloon application image header to an ELF image.
 
 The header uses the reserved words of the Cortex-M3 vector table:

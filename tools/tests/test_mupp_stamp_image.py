@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests for tools/mupp-stamp-image.py.
 
 Run from the repository root:

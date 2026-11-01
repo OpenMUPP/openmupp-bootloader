@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Flash layout of the rewritten bootloader (issue #4). The bootloader area
