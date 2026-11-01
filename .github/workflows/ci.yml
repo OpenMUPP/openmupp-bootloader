@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: CI
+
+# The same checks as .gitlab-ci.yml, in the public image of https://github.com/armint/firmware-build-image.
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-15.3.rel2-x86_64-arm-none-eabi
+  # system-stm32 gets its version from git describe. The checkout belongs to another user than the container
+  # user, so git refuses it ("dubious ownership") without this setting.
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+
+jobs:
+  lint-code:
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - run: |
+          cmake -S . -B clangformat-build -G "Unix Makefiles"
+          cmake --build clangformat-build --target clangformat
+          git diff --exit-code
+
+  build:
+    name: build ${{ matrix.board }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [mini, otheruse, stlinkv2, stlinkv2miniclone]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - run: |
+          cmake --preset ${{ matrix.board }} -DGCC_TOOLCHAIN_PREFIX=${GCC_TOOLCHAIN_PREFIX} -DMUPP_WERROR=ON
+          cmake --build --preset ${{ matrix.board }} -j$(nproc)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bootloader-${{ matrix.board }}-${{ github.sha }}
+          path: |
+            build/${{ matrix.board }}/*.elf
+            build/${{ matrix.board }}/*.hex
+            build/${{ matrix.board }}/*.bin
+          retention-days: 30
+
+  test-host:
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - run: |
+          cmake --preset host-tests -DMUPP_WERROR=ON
+          cmake --build --preset host-tests -j$(nproc)
+          ctest --preset host-tests
+
+  test-tools:
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          export PATH="${GCC_TOOLCHAIN_PREFIX}/bin:$PATH"
+          python3 -m unittest discover -v -s tools/tests
