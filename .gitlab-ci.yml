@@ -51,7 +51,7 @@ build:
       - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
   script:
     - cd "$CI_PROJECT_DIR"
-    - cmake --preset ${BOARD} -DGCC_TOOLCHAIN_PREFIX=${GCC_TOOLCHAIN_PREFIX} -DVSL_WERROR=ON
+    - cmake --preset ${BOARD} -DGCC_TOOLCHAIN_PREFIX=${GCC_TOOLCHAIN_PREFIX} -DMUPP_WERROR=ON
     - cmake --build --preset ${BOARD} -j`nproc`
   artifacts:
     paths:
@@ -67,12 +67,12 @@ test-host:
   needs: []
   script:
     - cd "$CI_PROJECT_DIR"
-    - cmake --preset host-tests -DVSL_WERROR=ON
+    - cmake --preset host-tests -DMUPP_WERROR=ON
     - cmake --build --preset host-tests -j`nproc`
     - ctest --preset host-tests
 
-# Tests of the image stamp tool (tools/vsl-stamp-image.py) and of
-# cmake/VslStampImage.cmake.
+# Tests of the image stamp tool (tools/mupp-stamp-image.py) and of
+# cmake/MuppStampImage.cmake.
 test-tools:
   stage: test
   needs: []

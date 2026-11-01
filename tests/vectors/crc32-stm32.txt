@@ -5,7 +5,7 @@
 # Format: one vector on each line: <crc> <data>
 #   <crc>   the expected CRC, 8 hexadecimal digits
 #   <data>  the data bytes in hexadecimal; '-' is no data
-# Used by tools/tests (vsl-stamp-image.py) and by the bootloader tests.
+# Used by tools/tests (mupp-stamp-image.py) and by the bootloader tests.
 ffffffff -
 df8a8a2b 78563412
 c704dd7b 00000000

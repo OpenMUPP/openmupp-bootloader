@@ -9,8 +9,8 @@
 
 #include <cstdint>
 
-#if !defined(VSL_BOOTLOADER_AREA_SIZE)
-#error "VSL_BOOTLOADER_AREA_SIZE is not set. The CMake target vsl-layout sets it."
+#if !defined(MUPP_BOOTLOADER_AREA_SIZE)
+#error "MUPP_BOOTLOADER_AREA_SIZE is not set. The CMake target mupp-layout sets it."
 #endif
 
 namespace layout {
@@ -22,7 +22,7 @@ constexpr uint32_t flashBase = 0x0800'0000;
 // multiple of this size.
 constexpr uint32_t wrpGroupSize = 4096;
 
-constexpr uint32_t bootloaderSize = VSL_BOOTLOADER_AREA_SIZE;
+constexpr uint32_t bootloaderSize = MUPP_BOOTLOADER_AREA_SIZE;
 constexpr uint32_t applicationStart = flashBase + bootloaderSize;
 
 static_assert(bootloaderSize > 0 && bootloaderSize % wrpGroupSize == 0, "the bootloader area must be a multiple of 4 KB");

@@ -1,7 +1,7 @@
 #pragma once
 
 // The check of the application image header (issue #9, plan section 3.7).
-// tools/vsl-stamp-image.py writes the header; check() of that tool uses
+// tools/mupp-stamp-image.py writes the header; check() of that tool uses
 // the same rules.
 //
 // The header is in the reserved words of the Cortex-M3 vector table:

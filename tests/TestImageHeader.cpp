@@ -24,7 +24,7 @@ uint32_t crcOf(const std::vector<uint32_t> &words) {
    return crc.value();
 }
 
-// A stamped image of length bytes, as vsl-stamp-image.py makes it.
+// A stamped image of length bytes, as mupp-stamp-image.py makes it.
 std::vector<uint32_t> stampedImage(uint32_t length = 256) {
    std::vector<uint32_t> words(length / 4);
    for(std::size_t i = 0; i < words.size(); ++i) {
@@ -72,7 +72,7 @@ std::vector<uint32_t> wordsOf(const std::string &hex) {
 } // namespace
 
 TEST_CASE("the software CRC gives the CRC test vectors of the stamp tool") {
-   std::ifstream file(VSL_CRC_VECTORS);
+   std::ifstream file(MUPP_CRC_VECTORS);
    REQUIRE(file.good());
    int vectors = 0;
    std::string line;
