@@ -74,13 +74,16 @@ constexpr std::optional<Pin> usbPullUp = Pin{ GPIOC_BASE, 13, true };
 constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 2, true };
 #elif defined(BOARD_STLINKV21)
 // ST-Link/V2-1 of the Nucleo-64 boards (schematics MB1136 and MB1360, same
-// MCU pins): no key. LED_STLINK PA9 drives a bicolor LED: high is red, low
+// MCU pins). The key is SWO (PA10, SWD connector pin 6, through 22 Ohm):
+// a wire from pin 6 to GND (pin 3) at power-up starts the bootloader. Only
+// the bootloader reads it, so the application can use PA10 for SWO.
+// LED_STLINK PA9 drives a bicolor LED: high is red, low
 // is green. USB_RENUMn PA15 drives an NPN emitter follower to the 1.5 kOhm
 // D+ pull-up: high connects, low disconnects. Open-drain: when released,
 // the base divider (10k to 5 V, 36k to GND) lifts D+ higher than a 3.3 V
 // push-pull output. PA15 is 5 V tolerant. PA15 is JTDI after the reset:
 // the bootloader disables the JTAG-DP (SWD stays on) to use it.
-constexpr std::optional<Pin> key = std::nullopt;
+constexpr std::optional<Pin> key = Pin{ GPIOA_BASE, 10, false };
 constexpr Pin led{ GPIOA_BASE, 9, true };
 constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 15, true, true };
 #elif defined(BOARD_STLINKV2MINICLONE)

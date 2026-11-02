@@ -14,12 +14,14 @@ The old name of this project is versaloon-bootloader.
 |---|---|---|---|---|---|
 | Versaloon Mini (MiniRelease1) | `mini` | 12 MHz | PC13 | PA15 (red), on when low | PB9 |
 | OtherUse | `otheruse` | 12 MHz | PA2 | PA15 (red), on when low | PB9 |
-| ST-Link/V2-1 of a Nucleo-64 board | `stlinkv21` | 8 MHz | PA15 | PA9: high is red, low is green | None |
+| ST-Link/V2-1 of a Nucleo-64 board | `stlinkv21` | 8 MHz | PA15 | PA9: high is red, low is green | PA10 (SWO) |
 | ST-Link/V2 mini clone (USB stick) | `stlinkv2miniclone` | 8 MHz | Fixed | PA9: high is blue, low is red | PB7 (SWIM) |
 
 The pull-up pin is high when the USB device is connected.
 The key is down when PB9 is low.
 On the ST-Link/V2 mini clone, the key is the SWIM pin of the header (PB7, low when down).
+On the ST-Link/V2-1, the key is pin 6 (SWO) of the SWD connector (PA10, low when down).
+Only the bootloader reads this key, so the application can use PA10 for SWO.
 The pins are the same as in OpenMUPP (`src/board/boards/`).
 
 The ST-Link/V2-1 support is not tested on hardware. Its pins come from
@@ -33,10 +35,10 @@ you use it:
   the base sets a higher D+ level than a 3.3 V output does.
   PA15 is JTDI after the reset, so the bootloader disables the JTAG-DP.
   SWD stays on.
-- The ST-Link/V2-1 has no key. The bootloader starts only with a boot
-  request from the application, or when the application is not valid.
-  If the application does not send boot requests, use a debug probe to
-  erase it.
+- The key of the ST-Link/V2-1 is SWO (PA10) on pin 6 of the SWD
+  connector. Connect pin 6 to GND (pin 3), then connect the board to
+  USB. Do not connect pin 6 to a target that holds SWO low at the reset.
+  If you do, the bootloader starts.
 - The original firmware has readout protection. `stm32f1x unlock 0`
   removes it and erases all of the flash, see
   [Update the bootloader](#update-the-bootloader).
@@ -188,8 +190,8 @@ ctest --preset host-tests
 1. Hold the key (PB9) down and reset the board. An application can also
    send a boot request, see
    [Start the bootloader from the application](#start-the-bootloader-from-the-application).
-   The ST-Link/V2-1 has no key: it starts the bootloader only with a boot
-   request, or when the application is not valid.
+   On the ST-Link/V2-1, connect SWO (SWD connector pin 6) to GND
+   (pin 3), then connect the board to USB.
    On the ST-Link/V2 mini clone, connect SWIM (header pin 3) to GND
    (header pin 5), then connect the board to USB.
 2. The bootloader starts and the LED comes on. The LED
