@@ -21,10 +21,10 @@
       "cacheVariables": { "BOARD": "otheruse" }
     },
     {
-      "name": "stlinkv2",
-      "displayName": "ST-Link/V2",
+      "name": "stlinkv21",
+      "displayName": "ST-Link/V2-1 (Nucleo)",
       "inherits": "base",
-      "cacheVariables": { "BOARD": "stlinkv2" }
+      "cacheVariables": { "BOARD": "stlinkv21" }
     },
     {
       "name": "stlinkv2miniclone",
@@ -42,7 +42,7 @@
   "buildPresets": [
     { "name": "mini", "configurePreset": "mini" },
     { "name": "otheruse", "configurePreset": "otheruse" },
-    { "name": "stlinkv2", "configurePreset": "stlinkv2" },
+    { "name": "stlinkv21", "configurePreset": "stlinkv21" },
     { "name": "stlinkv2miniclone", "configurePreset": "stlinkv2miniclone" },
     { "name": "host-tests", "configurePreset": "host-tests" }
   ],

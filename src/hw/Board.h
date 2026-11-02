@@ -22,9 +22,13 @@ struct Pin {
    uint8_t number;
    // True when a high level is the active state (LED on, key down, ...).
    bool activeHigh;
+   // Output: open-drain instead of push-pull. The high level then comes
+   // from the board.
+   bool openDrain = false;
 
    // CNF and MODE fields of GPIOx_CRL/CRH (RM0008, section 9.2.1).
    static constexpr uint32_t outputPushPull2MHz = 0x2;
+   static constexpr uint32_t outputOpenDrain2MHz = 0x6;
    static constexpr uint32_t inputFloating = 0x4;
    static constexpr uint32_t inputPull = 0x8;
 
@@ -68,12 +72,20 @@ constexpr Pin led{ GPIOA_BASE, 15, false };
 constexpr std::optional<Pin> usbPullUp = Pin{ GPIOC_BASE, 13, true };
 #elif defined(BOARD_OTHERUSE)
 constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 2, true };
-#elif defined(BOARD_STLINKV2)
-// ST-Link/V2 and its clones: no key, and a fixed 1.5 kOhm pull-up on D+.
-// Not tested on hardware: the pins come from OpenMUPP.
-constexpr std::optional<Pin> key = std::nullopt;
+#elif defined(BOARD_STLINKV21)
+// ST-Link/V2-1 of the Nucleo-64 boards (schematics MB1136 and MB1360, same
+// MCU pins). The key is SWO (PA10, SWD connector pin 6, through 22 Ohm):
+// a wire from pin 6 to GND (pin 3) at power-up starts the bootloader. Only
+// the bootloader reads it, so the application can use PA10 for SWO.
+// LED_STLINK PA9 drives a bicolor LED: high is red, low
+// is green. USB_RENUMn PA15 drives an NPN emitter follower to the 1.5 kOhm
+// D+ pull-up: high connects, low disconnects. Open-drain: when released,
+// the base divider (10k to 5 V, 36k to GND) lifts D+ higher than a 3.3 V
+// push-pull output. PA15 is 5 V tolerant. PA15 is JTDI after the reset:
+// the bootloader disables the JTAG-DP (SWD stays on) to use it.
+constexpr std::optional<Pin> key = Pin{ GPIOA_BASE, 10, false };
 constexpr Pin led{ GPIOA_BASE, 9, true };
-constexpr std::optional<Pin> usbPullUp = std::nullopt;
+constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 15, true, true };
 #elif defined(BOARD_STLINKV2MINICLONE)
 // ST-Link/V2 mini clone (USB stick, pin map measured, see OpenMUPP
 // docs/stlinkv2-mini-clone.md). The key is the SWIM pin of the header:
@@ -84,7 +96,7 @@ constexpr std::optional<Pin> key = Pin{ GPIOB_BASE, 7, false };
 constexpr Pin led{ GPIOA_BASE, 9, true };
 constexpr std::optional<Pin> usbPullUp = std::nullopt;
 #else
-#error "No board selected: define BOARD_MINI, BOARD_OTHERUSE, BOARD_STLINKV2 or BOARD_STLINKV2MINICLONE"
+#error "No board selected: define BOARD_MINI, BOARD_OTHERUSE, BOARD_STLINKV21 or BOARD_STLINKV2MINICLONE"
 #endif
 
 // USB D+. With a fixed pull-up, D+ low shows a disconnect to the host.

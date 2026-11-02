@@ -170,13 +170,14 @@ void os_startup_initialize_hardware() {
 
    RCC->APB2ENR |= RCC_APB2ENR_AFIOEN | board::led.clockBit() |
                    (board::usbPullUp ? board::usbPullUp->clockBit() : board::usbDp.clockBit());
-   // PA15 (LED of the Mini) is JTDI after the reset. SWD stays on.
+   // PA15 (LED of the Mini, USB pull-up of the ST-Link/V2-1) is JTDI after
+   // the reset. SWD stays on.
    AFIO->MAPR = (AFIO->MAPR & ~AFIO_MAPR_SWJ_CFG) | AFIO_MAPR_SWJ_CFG_JTAGDISABLE;
    board::led.set(true);
    board::led.configure(board::Pin::outputPushPull2MHz);
    setPullUp(false);
    if constexpr(board::usbPullUp) {
-      board::usbPullUp->configure(board::Pin::outputPushPull2MHz);
+      board::usbPullUp->configure(board::usbPullUp->openDrain ? board::Pin::outputOpenDrain2MHz : board::Pin::outputPushPull2MHz);
    }
 
    // No USB without the crystal: the LED blinks and the host sees no device.

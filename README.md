@@ -14,30 +14,51 @@ The old name of this project is versaloon-bootloader.
 |---|---|---|---|---|---|
 | Versaloon Mini (MiniRelease1) | `mini` | 12 MHz | PC13 | PA15 (red), on when low | PB9 |
 | OtherUse | `otheruse` | 12 MHz | PA2 | PA15 (red), on when low | PB9 |
-| ST-Link/V2 and clones | `stlinkv2` | 8 MHz | Fixed | PA9, on when high | None |
+| ST-Link/V2-1 of a Nucleo-64 board | `stlinkv21` | 8 MHz | PA15 | PA9: high is red, low is green | PA10 (SWO) |
 | ST-Link/V2 mini clone (USB stick) | `stlinkv2miniclone` | 8 MHz | Fixed | PA9: high is blue, low is red | PB7 (SWIM) |
 
 The pull-up pin is high when the USB device is connected.
 The key is down when PB9 is low.
 On the ST-Link/V2 mini clone, the key is the SWIM pin of the header (PB7, low when down).
+On the ST-Link/V2-1, the key is pin 6 (SWO) of the SWD connector (PA10, low when down).
+Only the bootloader reads this key, so the application can use PA10 for SWO.
 The pins are the same as in OpenMUPP (`src/board/boards/`).
 
-The ST-Link/V2 support is not tested on hardware. Its pins come from
-OpenMUPP. Do these checks on the real board before you use it:
+The ST-Link/V2-1 support is not tested on hardware. Its pins come from
+the Nucleo-64 schematics MB1136 (sheet 4) and MB1360 (sheet 7). The two
+boards use the same MCU pins. Do these checks on the real board before
+you use it:
 
-- The ST-Link/V2 has no switch for the D+ pull-up. To show a disconnect
-  to the host, the bootloader sets D+ (PA12) low for 20 ms.
-- The ST-Link/V2 has no key. The bootloader starts only with a boot
-  request from the application, or when the application is not valid.
-  If the application does not send boot requests, use a debug probe to
-  erase it.
-- The original ST-Link/V2 has readout protection. `stm32f1x unlock 0`
+- An NPN transistor connects the 1.5 kOhm pull-up to D+. `USB_RENUMn`
+  (PA15) drives its base: high connects the pull-up, low disconnects it.
+  PA15 is an open-drain output. When PA15 is released, the divider on
+  the base sets a higher D+ level than a 3.3 V output does.
+  PA15 is JTDI after the reset, so the bootloader disables the JTAG-DP.
+  SWD stays on.
+- The key of the ST-Link/V2-1 is SWO (PA10) on pin 6 of the SWD
+  connector. Connect pin 6 to GND (pin 3), then connect the board to
+  USB. Do not connect pin 6 to a target that holds SWO low at the reset.
+  If you do, the bootloader starts.
+  On a Nucleo that is not broken off, SWO also connects to PB3 of the
+  target MCU through SB15. If the target drives PB3 low, open SB15.
+- The original firmware has readout protection. `stm32f1x unlock 0`
   removes it and erases all of the flash, see
-  [Update the bootloader](#update-the-bootloader). Connect the debug
-  probe to the SWDIO and SWCLK pads of the board.
-- Some clones use a compatible MCU from another manufacturer, not an
-  STM32F103. The bootloader is tested on one of these MCUs only (on the
-  ST-Link/V2 mini clone, see below).
+  [Update the bootloader](#update-the-bootloader).
+- The MCU (STM32F103CBT6) has no SWD header. Connect the debug probe to
+  the solder bridge pads of the "reserved" group, on the side away from
+  the jumper header. On MB1360, this is the pad next to the silkscreen
+  label of the solder bridge. The pads are different on the two boards:
+
+  | Signal | MCU pin | MB1136 | MB1360 |
+  |---|---|---|---|
+  | SWCLK (`STM_JTCK`) | PA14 (pin 37) | SB6 | SB8 |
+  | SWDIO (`STM_JTMS`) | PA13 (pin 34) | SB10 | SB12 |
+  | NRST (`STM_RST`) | NRST (pin 7) | SB11, the other pad is GND | JP1, the other pin is GND |
+  | 3.3 V | | SB4 | SB6 |
+  | GND | | SB8 | SB10 |
+
+  The pads of the "reserved" group are open. Do not close them.
+  Measure each pad to its MCU pin before you connect the probe.
 
 The ST-Link/V2 mini clone is the USB stick clone with a 2x5 header. Its
 pin map is measured (OpenMUPP `docs/stlinkv2-mini-clone.md`).
@@ -93,8 +114,8 @@ cmake --preset mini
 cmake --build --preset mini
 ```
 
-Use the preset `otheruse` for the OtherUse board, `stlinkv2` for the
-ST-Link/V2 and `stlinkv2miniclone` for the ST-Link/V2 mini clone.
+Use the preset `otheruse` for the OtherUse board, `stlinkv21` for the
+ST-Link/V2-1 and `stlinkv2miniclone` for the ST-Link/V2 mini clone.
 
 The build writes these files to the build directory. A preset uses
 `build/<board>/`:
@@ -120,8 +141,8 @@ These CMake options change the build:
 
 | Option | Default | Content |
 |---|---|---|
-| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv2`, `stlinkv2miniclone`). Overrides `OPENMUPP_BOOTLOADER_BOARDS`. A preset selects one board. |
-| `OPENMUPP_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv2` and `stlinkv2miniclone` alone or together. |
+| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv21`, `stlinkv2miniclone`). Overrides `OPENMUPP_BOOTLOADER_BOARDS`. A preset selects one board. |
+| `OPENMUPP_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv21` and `stlinkv2miniclone` alone or together. |
 | `OPENMUPP_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
 | `MUPP_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
 | `MUPP_LTO` | `ON` | Link-time optimisation |
@@ -172,8 +193,8 @@ ctest --preset host-tests
 1. Hold the key (PB9) down and reset the board. An application can also
    send a boot request, see
    [Start the bootloader from the application](#start-the-bootloader-from-the-application).
-   The ST-Link/V2 has no key: it starts the bootloader only with a boot
-   request, or when the application is not valid.
+   On the ST-Link/V2-1, connect SWO (SWD connector pin 6) to GND
+   (pin 3), then connect the board to USB.
    On the ST-Link/V2 mini clone, connect SWIM (header pin 3) to GND
    (header pin 5), then connect the board to USB.
 2. The bootloader starts and the LED comes on. The LED
