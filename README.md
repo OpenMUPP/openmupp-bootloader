@@ -39,6 +39,8 @@ you use it:
   connector. Connect pin 6 to GND (pin 3), then connect the board to
   USB. Do not connect pin 6 to a target that holds SWO low at the reset.
   If you do, the bootloader starts.
+  On a Nucleo that is not broken off, SWO also connects to PB3 of the
+  target MCU through SB15. If the target drives PB3 low, open SB15.
 - The original firmware has readout protection. `stm32f1x unlock 0`
   removes it and erases all of the flash, see
   [Update the bootloader](#update-the-bootloader).
