@@ -22,9 +22,13 @@ struct Pin {
    uint8_t number;
    // True when a high level is the active state (LED on, key down, ...).
    bool activeHigh;
+   // Output: open-drain instead of push-pull. The high level then comes
+   // from the board.
+   bool openDrain = false;
 
    // CNF and MODE fields of GPIOx_CRL/CRH (RM0008, section 9.2.1).
    static constexpr uint32_t outputPushPull2MHz = 0x2;
+   static constexpr uint32_t outputOpenDrain2MHz = 0x6;
    static constexpr uint32_t inputFloating = 0x4;
    static constexpr uint32_t inputPull = 0x8;
 
@@ -72,11 +76,13 @@ constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 2, true };
 // ST-Link/V2-1 of the Nucleo-64 boards (schematics MB1136 and MB1360, same
 // MCU pins): no key. LED_STLINK PA9 drives a bicolor LED: high is red, low
 // is green. USB_RENUMn PA15 drives an NPN emitter follower to the 1.5 kOhm
-// D+ pull-up: high connects, low disconnects. PA15 is JTDI after the reset:
+// D+ pull-up: high connects, low disconnects. Open-drain: when released,
+// the base divider (10k to 5 V, 36k to GND) lifts D+ higher than a 3.3 V
+// push-pull output. PA15 is 5 V tolerant. PA15 is JTDI after the reset:
 // the bootloader disables the JTAG-DP (SWD stays on) to use it.
 constexpr std::optional<Pin> key = std::nullopt;
 constexpr Pin led{ GPIOA_BASE, 9, true };
-constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 15, true };
+constexpr std::optional<Pin> usbPullUp = Pin{ GPIOA_BASE, 15, true, true };
 #elif defined(BOARD_STLINKV2MINICLONE)
 // ST-Link/V2 mini clone (USB stick, pin map measured, see OpenMUPP
 // docs/stlinkv2-mini-clone.md). The key is the SWIM pin of the header:

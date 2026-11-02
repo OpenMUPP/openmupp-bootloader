@@ -29,6 +29,8 @@ you use it:
 
 - An NPN transistor connects the 1.5 kOhm pull-up to D+. `USB_RENUMn`
   (PA15) drives its base: high connects the pull-up, low disconnects it.
+  PA15 is an open-drain output. When PA15 is released, the divider on
+  the base sets a higher D+ level than a 3.3 V output does.
   PA15 is JTDI after the reset, so the bootloader disables the JTAG-DP.
   SWD stays on.
 - The ST-Link/V2-1 has no key. The bootloader starts only with a boot
