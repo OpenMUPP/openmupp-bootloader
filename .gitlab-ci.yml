@@ -48,7 +48,7 @@ build:
   stage: build
   parallel:
     matrix:
-      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
+      - BOARD: [mini, otheruse, stlinkv21, stlinkv2miniclone]
   script:
     - cd "$CI_PROJECT_DIR"
     - cmake --preset ${BOARD} -DGCC_TOOLCHAIN_PREFIX=${GCC_TOOLCHAIN_PREFIX} -DMUPP_WERROR=ON

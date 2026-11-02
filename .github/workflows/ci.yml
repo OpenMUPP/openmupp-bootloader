@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: [mini, otheruse, stlinkv2, stlinkv2miniclone]
+        board: [mini, otheruse, stlinkv21, stlinkv2miniclone]
     steps:
       - uses: actions/checkout@v5
         with:
