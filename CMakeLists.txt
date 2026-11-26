@@ -46,6 +46,10 @@ if(MUPP_HOST_TESTS OR NOT CMAKE_CROSSCOMPILING)
     endif()
     enable_testing()
     add_subdirectory(tests)
+elseif(BOARD STREQUAL "openmuppv1")
+    # The CH32V307 of OpenMUPP v1: RISC-V, the DFU bootloader. It builds in
+    # its own build directory, with cmake/gcc_riscv.cmake.
+    include(Ch32v30xBootloader)
 else()
     # Boards to build, with the crystal frequency of each board.
     set(MUPP_BOARDS mini otheruse stlinkv21 stlinkv2miniclone)
@@ -208,6 +212,8 @@ if(COMMAND clangformat_setup)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/Layout.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/boot/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ch32v30x/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ch32v30x/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/hw/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/protocol/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/protocol/*.h"
