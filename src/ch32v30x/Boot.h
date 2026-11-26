@@ -26,22 +26,8 @@
 
 namespace ch32 {
 
-// CH32FV2x_V3xRM: BKP_DATARx (5.3), PWR_CTLR.DBP (4.4.1), CRC (12.3).
-// ch32v30x.h of ch32v00x-system has no BKP, PWR and CRC.
-// Functions, not references: the boot decision runs before the C++
-// start-up code, so no object with a dynamic initialisation is ready.
-inline volatile uint32_t &reg32(uintptr_t address) {
-   return *reinterpret_cast<volatile uint32_t *>(address);
-}
-inline volatile uint32_t &bkpDatar1() {
-   return reg32(0x4000'6C04);
-}
-inline volatile uint32_t &bkpDatar2() {
-   return reg32(0x4000'6C08);
-}
-
-// Writes a backup data register (BKP_DATARx keep their value over a reset).
-void writeBackup(volatile uint32_t &reg, uint16_t value);
+// Writes a backup data register (BKP->DATARx keep their value over a reset).
+void writeBackup(volatile uint16_t &reg, uint16_t value);
 
 // The application image check with the CRC unit.
 class ApplicationImage : public protocol::Application {

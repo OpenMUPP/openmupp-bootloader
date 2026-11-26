@@ -17,6 +17,7 @@
 //
 // The write protection of the bootloader area is not in this version.
 
+#include <peripherals/Uid.h>
 #include <startup-hooks.h>
 #include <system_ch32v30x.h>
 #include <wch_device.h>
@@ -79,8 +80,8 @@ void wait(uint32_t ms) {
 [[noreturn]] void restart(UsbHs &usb, uint16_t dr1, uint16_t dr2) {
    usb.stop();
    wait(disconnectMs);
-   writeBackup(bkpDatar1(), dr1);
-   writeBackup(bkpDatar2(), dr2);
+   writeBackup(BKP->DATAR1, dr1);
+   writeBackup(BKP->DATAR2, dr2);
    NVIC_SystemReset();
    __builtin_unreachable();
 }
@@ -109,7 +110,7 @@ void os_startup_initialize_hardware() {
    configureLed(stateLedPin);
 
    // SystemInit() keeps HSI when the crystal does not start
-   if((RCC->CFGR0 & RCC_CFGR0_SWS_MASK) != RCC_CFGR0_SWS_PLL) {
+   if((RCC->CFGR0 & RCC_SWS) != RCC_SWS_PLL) {
       for(bool on = false;; on = !on) {
          setLed(usbLedPin, on);
          setLed(stateLedPin, on);
@@ -119,10 +120,8 @@ void os_startup_initialize_hardware() {
 }
 
 int main() {
-   uint8_t uid[12];
-   for(uint32_t i = 0; i < sizeof uid; ++i) {
-      uid[i] = *reinterpret_cast<const volatile uint8_t *>(0x1FFF'F7E8 + i); // UID, RM 31.2
-   }
+   uint8_t uid[hw::Uid::SizeBytes];
+   hw::Uid::read(uid);
    const usb::descriptors::SerialString serial{ uid };
    dfu::Protocol protocol{ dfuConfig, flash, flash, application };
    usb::DfuDevice<UsbHs> device{ usbHs, protocol, serial.bytes };

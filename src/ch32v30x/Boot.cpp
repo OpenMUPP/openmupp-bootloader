@@ -18,41 +18,26 @@ namespace ch32 {
 
 namespace {
 
-volatile uint32_t &pwrCtlr() {
-   return reg32(0x4000'7000);
-}
-constexpr uint32_t pwrCtlrDbp = 1u << 8;
-volatile uint32_t &crcDatar() {
-   return reg32(0x4002'3000);
-}
-volatile uint32_t &crcCtlr() {
-   return reg32(0x4002'3008);
-}
-constexpr uint32_t crcCtlrReset = 1u << 0;
-
-constexpr uint32_t rccPwrEn = 1u << 28; // RCC_APB1PCENR
-constexpr uint32_t rccBkpEn = 1u << 27;
-constexpr uint32_t rccCrcEn = 1u << 6; // RCC_AHBPCENR
-constexpr uint32_t decisionApb1Clocks = rccPwrEn | rccBkpEn;
+constexpr uint32_t decisionApb1Clocks = RCC_PWREN | RCC_BKPEN;
 
 class CrcUnit {
    public:
    void reset() {
-      crcCtlr() = crcCtlrReset;
+      CRC->CTLR = CRC_CTLR_RESET;
    }
    void add(uint32_t word) {
-      crcDatar() = word;
+      CRC->DATAR = word;
    }
    uint32_t value() const {
-      return crcDatar();
+      return CRC->DATAR;
    }
 };
 
 [[noreturn]] void startApplication() {
    // Peripherals back to the reset state. The CRC unit has no reset bit: a
    // reset of the calculation gives the reset value of CRC_DATAR.
-   crcCtlr() = crcCtlrReset;
-   RCC->AHBPCENR &= ~rccCrcEn;
+   CRC->CTLR = CRC_CTLR_RESET;
+   RCC->AHBPCENR &= ~RCC_CRCEN;
    RCC->APB1PCENR &= ~decisionApb1Clocks;
    // cpuInit() of the start-up set mtvec, mstatus and INTSYSCR. The
    // application sets them again; interrupts stay off until then. The
@@ -67,10 +52,10 @@ class CrcUnit {
 
 } // namespace
 
-void writeBackup(volatile uint32_t &reg, uint16_t value) {
-   pwrCtlr() |= pwrCtlrDbp;
+void writeBackup(volatile uint16_t &reg, uint16_t value) {
+   PWR->CTLR |= PWR_CTLR_DBP;
    reg = value;
-   pwrCtlr() &= ~pwrCtlrDbp;
+   PWR->CTLR &= ~PWR_CTLR_DBP;
 }
 
 bool ApplicationImage::isValid() const {
@@ -85,16 +70,16 @@ using namespace ch32;
 
 extern "C" void os_startup_initialize_hardware_early() {
    RCC->APB1PCENR |= decisionApb1Clocks;
-   RCC->AHBPCENR |= rccCrcEn;
+   RCC->AHBPCENR |= RCC_CRCEN;
 
-   const auto dr1 = static_cast<uint16_t>(bkpDatar1());
-   const auto dr2 = static_cast<uint16_t>(bkpDatar2());
+   const auto dr1 = static_cast<uint16_t>(BKP->DATAR1);
+   const auto dr2 = static_cast<uint16_t>(BKP->DATAR2);
    // Each request has an effect for one reset only.
    if(dr1 == boot::bootRequest) {
-      writeBackup(bkpDatar1(), 0);
+      writeBackup(BKP->DATAR1, 0);
    }
    if(dr2 == boot::goToken) {
-      writeBackup(bkpDatar2(), 0);
+      writeBackup(BKP->DATAR2, 0);
    }
 
    const auto decision = boot::decide(dr1, dr2, [] { return false; }, [] { return ApplicationImage{}.isValid(); });

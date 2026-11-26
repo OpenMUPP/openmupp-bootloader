@@ -19,43 +19,42 @@ void delayCycles(uint32_t cycles) {
 } // namespace
 
 void UsbHs::resetEp0() {
-   USBHS->UEP_CONFIG = 0;
-   USBHS->UEP_TYPE = 0;
-   USBHS->UEP_BUF_MOD = 0;
-   USBHS->UEP0_DMA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(buffer_));
-   USBHS->UEP_MAX_LEN[0].MAX_LEN = ep0Size;
-   ep0().T_LEN = 0;
-   ep0().TX_CTRL = USBHS_UEP_T_RES_NAK;
-   ep0().RX_CTRL = USBHS_UEP_R_RES_ACK;
-   USBHS->DEV_AD = 0;
+   USBHSD->ENDP_CONFIG = 0;
+   USBHSD->ENDP_TYPE = 0;
+   USBHSD->BUF_MODE = 0;
+   USBHSD->UEP0_DMA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(buffer_));
+   USBHSD->UEP0_MAX_LEN = ep0Size;
+   USBHSD->UEP0_TX_LEN = 0;
+   USBHSD->UEP0_TX_CTRL = USBHS_UEP_T_RES_NAK;
+   USBHSD->UEP0_RX_CTRL = USBHS_UEP_R_RES_ACK;
+   USBHSD->DEV_AD = 0;
 }
 
 void UsbHs::start() {
    // The clock sequence of the WCH USBHS examples: PHY PLL from HSE at
    // 4 MHz, 48 MHz USB clock from the PHY, PLL on, then the AHB clock.
-   RCC->CFGR2 = (RCC->CFGR2 & ~(RCC_CFGR2_USBHSDIV_MASK | RCC_CFGR2_USBHSPLLSRC | RCC_CFGR2_USBHSCLK_MASK)) | usbHsDiv |
-                RCC_CFGR2_USBHSCLK_4MHZ | RCC_CFGR2_USBFSSRC;
-   RCC->CFGR2 |= RCC_CFGR2_USBHSPLL;
+   RCC->CFGR2 = (RCC->CFGR2 & ~(RCC_USBHSDIV | RCC_USBHSPLLSRC | RCC_USBHSCLK)) | usbHsDiv | USBHS_PLL_CKREF_4M | RCC_USBFSSRC;
+   RCC->CFGR2 |= RCC_USBHSPLL;
    RCC->AHBPCENR |= RCC_USBHSEN;
 
    // RST_SIE must be cleared by software (RM 22.2.1.1): at least 10 us.
-   USBHS->CTRL = USBHS_UC_CLR_ALL | USBHS_UC_RST_SIE;
+   USBHSD->CONTROL = USBHS_UC_CLR_ALL | USBHS_UC_RESET_SIE;
    delayCycles(2000);
-   USBHS->CTRL = 0;
-   USBHS->HOST_CTRL = USBHS_UH_PHY_SUSPENDM;
-   USBHS->CTRL = USBHS_UC_DMA_EN | USBHS_UC_INT_BUSY | USBHS_UC_SPEED_FULL;
-   USBHS->INT_EN = 0;
-   USBHS->INT_FG = 0xFF;
+   USBHSD->CONTROL = 0;
+   USBHSD->HOST_CTRL = USBHS_UH_PHY_SUSPENDM;
+   USBHSD->CONTROL = USBHS_UC_DMA_EN | USBHS_UC_INT_BUSY | USBHS_UC_SPEED_FULL;
+   USBHSD->INT_EN = 0;
+   USBHSD->INT_FG = 0xFF;
    resetEp0();
-   USBHS->CTRL |= USBHS_UC_DEV_PU_EN;
+   USBHSD->CONTROL |= USBHS_UC_DEV_PU_EN;
 }
 
 void UsbHs::stop() {
-   USBHS->CTRL &= static_cast<uint8_t>(~USBHS_UC_DEV_PU_EN);
-   USBHS->CTRL = USBHS_UC_CLR_ALL | USBHS_UC_RST_SIE;
-   USBHS->HOST_CTRL = 0;
+   USBHSD->CONTROL &= static_cast<uint8_t>(~USBHS_UC_DEV_PU_EN);
+   USBHSD->CONTROL = USBHS_UC_CLR_ALL | USBHS_UC_RESET_SIE;
+   USBHSD->HOST_CTRL = 0;
    RCC->AHBPCENR &= ~RCC_USBHSEN;
-   RCC->CFGR2 &= ~RCC_CFGR2_USBHSPLL;
+   RCC->CFGR2 &= ~RCC_USBHSPLL;
 }
 
 } // namespace ch32
