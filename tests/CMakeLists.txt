@@ -16,13 +16,16 @@ add_executable(mupp-bootloader-tests
         main.cpp
         TestAn3155Protocol.cpp
         TestBootDecision.cpp
+        TestDfuDevice.cpp
+        TestDfuProtocol.cpp
         TestFlashRules.cpp
         TestImageHeader.cpp
         TestLayout.cpp
         TestMemoryMap.cpp
         TestOptionByteValues.cpp
         TestStm32flashSequences.cpp
-        "${PROJECT_SOURCE_DIR}/src/protocol/An3155Protocol.cpp")
+        "${PROJECT_SOURCE_DIR}/src/protocol/An3155Protocol.cpp"
+        "${PROJECT_SOURCE_DIR}/src/protocol/DfuProtocol.cpp")
 set_target_properties(mupp-bootloader-tests PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON)
