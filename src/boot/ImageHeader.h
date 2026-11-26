@@ -6,7 +6,11 @@
 // tools/mupp-stamp-image.py writes the header; check() of that tool uses
 // the same rules.
 //
-// The header is in the reserved words of the Cortex-M3 vector table:
+// The header is in reserved words of the vector table. On the Cortex-M3,
+// they are the reserved exception vectors 7 to 10. On the CH32V307, the
+// image starts with the "j _start" of the reset handler, and the vector
+// table follows at offset 4. The same offsets are then the reserved
+// exceptions 6 to 9 of the QingKe V4F, which the core never uses.
 //
 // | Offset | Content                                                  |
 // |--------|----------------------------------------------------------|
@@ -16,8 +20,8 @@
 // | `0x28` | Reserved, `0`                                            |
 //
 // No hardware access: the host tests use this header too. The CRC is a
-// template parameter: the bootloader uses the CRC unit of the STM32F1, the
-// host tests use a software CRC.
+// template parameter: the bootloader uses the CRC unit of the STM32F1 or of
+// the CH32V307 (the same algorithm), the host tests use a software CRC.
 
 #include <cstddef>
 #include <cstdint>
@@ -39,12 +43,33 @@ constexpr uint32_t minLength = 64;
 constexpr uint32_t ramStart = 0x2000'0000;
 constexpr uint32_t ramSize = 20 * 1024;
 
+// The architecture of the image: the rule for the first words.
+enum class Arch : uint8_t { cortexM3, riscv };
+
+// The offset of a RISC-V "j" (JAL x0) in word 0 of the image, or -1 when
+// word 0 is not a JAL x0. The offset is relative to the start of the image.
+constexpr int32_t riscvJumpOffset(uint32_t instruction) {
+   // Opcode JAL (0x6F) and rd = x0
+   if((instruction & 0xFFFu) != 0x06Fu) {
+      return -1;
+   }
+   // imm[20|10:1|11|19:12] in bits 31:12
+   const uint32_t imm = ((instruction >> 31) & 0x1u) << 20 | ((instruction >> 12) & 0xFFu) << 12 |
+                        ((instruction >> 20) & 0x1u) << 11 | ((instruction >> 21) & 0x3FFu) << 1;
+   if(imm & (1u << 20)) {
+      return -1; // a jump backwards leaves the image
+   }
+   return static_cast<int32_t>(imm);
+}
+
 // True when the image at base has a valid header and CRC:
 //
 // - The magic is correct.
 // - The length is a multiple of 4, between minLength and maxLength.
-// - The initial SP is in the RAM.
-// - The reset vector is odd (Thumb) and inside the image.
+// - Cortex-M3: the initial SP is in the RAM, and the reset vector is odd
+//   (Thumb) and inside the image.
+// - RISC-V: word 0 is a "j" to an address inside the image, behind the
+//   vector table words of the header.
 // - The CRC is correct.
 //
 // words: the image in memory, at the address base. maxLength: the size of
@@ -52,7 +77,7 @@ constexpr uint32_t ramSize = 20 * 1024;
 // Crc: reset() starts a new CRC, add(word) adds one word, value() gives
 // the CRC.
 template <typename Crc>
-bool isValid(const uint32_t *words, uint32_t base, uint32_t maxLength, Crc &crc) {
+bool isValid(const uint32_t *words, uint32_t base, uint32_t maxLength, Crc &crc, Arch arch = Arch::cortexM3) {
    if(words[magicWord] != magic) {
       return false;
    }
@@ -60,13 +85,20 @@ bool isValid(const uint32_t *words, uint32_t base, uint32_t maxLength, Crc &crc)
    if(length % 4 != 0 || length < minLength || length > maxLength) {
       return false;
    }
-   const uint32_t sp = words[stackPointerWord];
-   if(sp < ramStart || sp - ramStart > ramSize) {
-      return false;
-   }
-   const uint32_t reset = words[resetVectorWord];
-   if((reset & 1) == 0 || (reset & ~1u) - base >= length) {
-      return false;
+   if(arch == Arch::riscv) {
+      const int32_t target = riscvJumpOffset(words[0]);
+      if(target < static_cast<int32_t>((crcWord + 2) * 4) || static_cast<uint32_t>(target) >= length) {
+         return false;
+      }
+   } else {
+      const uint32_t sp = words[stackPointerWord];
+      if(sp < ramStart || sp - ramStart > ramSize) {
+         return false;
+      }
+      const uint32_t reset = words[resetVectorWord];
+      if((reset & 1) == 0 || (reset & ~1u) - base >= length) {
+         return false;
+      }
    }
    crc.reset();
    for(std::size_t i = 0; i < length / 4; ++i) {

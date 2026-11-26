@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Add the versaloon application image header to an ELF image.
 
-The header uses the reserved words of the Cortex-M3 vector table:
+The header uses reserved words of the vector table. On the Cortex-M3 they
+are reserved exception vectors. On the CH32V307 (RISC-V), the image starts
+with the "j _start" of the reset handler (.init) and the vector table
+follows at offset 4; the same offsets are reserved exceptions there.
 
     0x1C  magic 0x314C5356 ("VSL1")
     0x20  image length in bytes, a multiple of 4, from the application start
@@ -11,14 +14,15 @@ The header uses the reserved words of the Cortex-M3 vector table:
 
 The tool writes the header into the .isr_vector section of the ELF file
 (objcopy --update-section). It can also write the stamped image as .bin and
-.hex. The bootloader starts only an application with a valid header.
+.hex. The bootloader starts only an application with a valid header. The
+architecture comes from the ELF header (e_machine).
 
 Usage:
     mupp-stamp-image.py <image.elf> [--bin <out.bin>] [--hex <out.hex>]
-    mupp-stamp-image.py --check <image.bin> --base <address>
+    mupp-stamp-image.py --check <image.bin> --base <address> [--arch riscv]
 
-Python 3.7 or later, standard library only. The ELF mode needs
-arm-none-eabi-objcopy.
+Python 3.7 or later, standard library only. The ELF mode needs the objcopy
+of the toolchain (arm-none-eabi-objcopy or riscv-none-elf-objcopy).
 """
 
 import argparse
@@ -41,9 +45,14 @@ CRC_ZERO_START = MAGIC_OFFSET
 CRC_ZERO_END = CRC_OFFSET + 4
 
 MIN_LENGTH = 64
-# Largest flash of the STM32F103x8/xB. Without --max-length, the tool
-# refuses a larger image, for example a section in RAM without a load address.
-MAX_FLASH = 128 * 1024
+# Largest flash of the STM32F103x8/xB and the zero-wait flash of the
+# CH32V307. Without --max-length, the tool refuses a larger image, for
+# example a section in RAM without a load address.
+MAX_FLASH = {"cortex-m3": 128 * 1024, "riscv": 256 * 1024}
+ARCHES = ("cortex-m3", "riscv")
+# e_machine of the ELF header
+EM_ARM = 0x28
+EM_RISCV = 0xF3
 PT_LOAD = 1
 SHT_NOBITS = 8
 SHF_ALLOC = 2
@@ -122,7 +131,18 @@ def stamp(image):
     return bytes(image)
 
 
-def check(image, base, max_length=None):
+def riscv_jump_offset(instruction):
+    """The offset of a RISC-V JAL x0 ("j"), or None for another instruction."""
+    if instruction & 0xFFF != 0x06F:
+        return None
+    imm = (((instruction >> 31) & 0x1) << 20 | ((instruction >> 12) & 0xFF) << 12
+           | ((instruction >> 20) & 0x1) << 11 | ((instruction >> 21) & 0x3FF) << 1)
+    if imm & (1 << 20):
+        return None
+    return imm
+
+
+def check(image, base, max_length=None, arch="cortex-m3"):
     """Return a list of the rules that the image breaks. Empty means valid.
 
     The image is the flash content from the application start (base). It can
@@ -144,6 +164,11 @@ def check(image, base, max_length=None):
     expected = image_crc(image[:length])
     if crc != expected:
         errors.append(f"the CRC is 0x{crc:08X}, expected 0x{expected:08X}")
+    if arch == "riscv":
+        target = riscv_jump_offset(_word(image, 0))
+        if target is None or not HEADER_END <= target < length:
+            errors.append(f"word 0 (0x{_word(image, 0):08X}) is not a jump into the image behind the header")
+        return errors
     sp = _word(image, 0)
     if not RAM_START <= sp <= RAM_START + RAM_SIZE:
         errors.append(f"the initial SP 0x{sp:08X} is not in RAM")
@@ -198,21 +223,39 @@ def _run(command):
         raise StampError(f"{' '.join(command)} failed:\n{result.stderr.strip()}")
 
 
+def elf_arch(elf_data):
+    """The architecture of an ELF file: "cortex-m3" or "riscv"."""
+    if elf_data[:4] != b"\x7fELF" or elf_data[4] != 1 or elf_data[5] != 1:
+        raise StampError("not an ELF32 little-endian file")
+    machine = struct.unpack_from("<H", elf_data, 18)[0]
+    if machine == EM_ARM:
+        return "cortex-m3"
+    if machine == EM_RISCV:
+        return "riscv"
+    raise StampError(f"the ELF machine 0x{machine:X} is not Arm or RISC-V")
+
+
 def stamp_elf(elf, objcopy, bin_out=None, hex_out=None, max_length=None):
     """Write the header into the .isr_vector section of the ELF file."""
     with open(elf, "rb") as f:
         elf_data = f.read()
+    arch = elf_arch(elf_data)
     sections = _loaded_sections(elf_data)
     if VECTOR_SECTION not in sections:
         raise StampError(f"the ELF file has no {VECTOR_SECTION} section")
-    address, size = sections[VECTOR_SECTION]
-    if size < HEADER_END:
+    vectors_address, size = sections[VECTOR_SECTION]
+    address = min(lma for lma, _ in sections.values())
+    # The Cortex-M3 image starts with the vector table. The RISC-V image
+    # starts with the reset jump, and the vector table follows.
+    offset = vectors_address - address
+    if offset != (4 if arch == "riscv" else 0):
+        raise StampError(f"the {VECTOR_SECTION} section is not at offset {4 if arch == 'riscv' else 0} of the image")
+    if offset + size < HEADER_END:
         raise StampError(f"the {VECTOR_SECTION} section is only {size} bytes")
     # Check the size before objcopy makes the binary image: a section in RAM
     # without a load address in flash gives an image of hundreds of MB.
-    limit = MAX_FLASH if max_length is None else max_length
-    span = (max(lma + size for lma, size in sections.values())
-            - min(lma for lma, _ in sections.values()))
+    limit = MAX_FLASH[arch] if max_length is None else max_length
+    span = (max(lma + size for lma, size in sections.values()) - address)
     if span > limit:
         raise StampError(f"the image is {span} bytes, the limit is {limit} bytes")
 
@@ -227,16 +270,16 @@ def stamp_elf(elf, objcopy, bin_out=None, hex_out=None, max_length=None):
             image = f.read()
         with open(vectors_file, "rb") as f:
             vectors = f.read()
-        if not image.startswith(vectors):
-            raise StampError(f"the {VECTOR_SECTION} section is not at the start of the image")
+        if image[offset:offset + len(vectors)] != vectors:
+            raise StampError(f"the {VECTOR_SECTION} section is not at offset {offset} of the image")
 
         stamped = stamp(image)
-        errors = check(stamped, address, max_length)
+        errors = check(stamped, address, max_length, arch)
         if errors:
             raise StampError("the stamped image is not valid: " + "; ".join(errors))
 
         with open(vectors_file, "wb") as f:
-            f.write(stamped[:len(vectors)])
+            f.write(stamped[offset:offset + len(vectors)])
         # Write a copy next to the ELF file, then replace the ELF file in one
         # step. A failure does not leave a damaged ELF file.
         stamped_elf = elf + ".stamp.tmp"
@@ -282,6 +325,8 @@ def main(argv=None):
                         help="check a stamped .bin file and do not change it")
     parser.add_argument("--base", type=_int,
                         help="application start address, for --check")
+    parser.add_argument("--arch", choices=ARCHES, default="cortex-m3",
+                        help="architecture of the image, for --check (default: %(default)s)")
     args = parser.parse_args(argv)
 
     try:
@@ -289,7 +334,7 @@ def main(argv=None):
             if args.base is None:
                 parser.error("--check needs --base")
             with open(args.image, "rb") as f:
-                errors = check(f.read(), args.base, args.max_length)
+                errors = check(f.read(), args.base, args.max_length, args.arch)
             for error in errors:
                 print(f"{args.image}: {error}", file=sys.stderr)
             if not errors:
