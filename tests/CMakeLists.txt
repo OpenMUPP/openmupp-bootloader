@@ -16,6 +16,7 @@ add_executable(mupp-bootloader-tests
         main.cpp
         TestAn3155Protocol.cpp
         TestBootDecision.cpp
+        TestDfuDevice.cpp
         TestDfuProtocol.cpp
         TestFlashRules.cpp
         TestImageHeader.cpp
