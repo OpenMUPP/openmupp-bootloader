@@ -13,9 +13,15 @@
 // written, the pages under it are erased. The pages behind the last block
 // keep their content. The zero-length download ends the download: the
 // manifestation checks the image header and the CRC. A valid image puts
-// the device into dfuMANIFEST-WAIT-RESET, and the bootloader then resets
-// into the application (bitWillDetach). An image that is not valid gives
-// errVERIFY, and the device stays in DFU mode.
+// the device back into dfuIDLE (bitManifestationTolerant): dfu-util 0.11
+// ends a download with "Done!" and exit code 0 only when the GETSTATUS
+// after the manifestation reports dfuIDLE. After the status stage of that
+// GETSTATUS, or after a bus reset (dfu-util -R), resetRequested() is true,
+// and the bootloader resets into the application. An image that is not
+// valid gives errVERIFY, and the device stays in DFU mode.
+//
+// Each block of a download and of an upload has wTransferSize bytes. Only
+// the last block of a download can be shorter.
 //
 // The flash work does not run in the USB request. GETSTATUS reports
 // dfuDNBUSY or dfuMANIFEST with bwPollTimeout. After the status stage of
@@ -82,6 +88,13 @@ constexpr uint8_t abort = 6;
 constexpr uint16_t transferSize = 1024;
 
 struct Config {
+   // True when the area and the page size fit together: a page never
+   // reaches outside the area.
+   constexpr bool valid() const {
+      return pageSize > 0 && pageSize % 4 == 0 && start < end && start % pageSize == 0 && end % pageSize == 0 &&
+             (transferSize % pageSize == 0 || pageSize % transferSize == 0);
+   }
+
    // The application area: [start, end)
    uint32_t start;
    uint32_t end;
@@ -128,12 +141,16 @@ class Protocol {
    // The status stage of the last request is complete
    void requestDone() {
       workReady_ = workPending_;
+      if(startPending_) {
+         resetRequested_ = true;
+      }
    }
    // The flash work of dfuDNBUSY or dfuMANIFEST. The main loop calls it.
    void runWork();
-   // True after a valid manifestation: start the application
+   // True after a valid manifestation and the GETSTATUS that reported it:
+   // start the application
    bool resetRequested() const {
-      return state_ == State::manifestWaitReset;
+      return resetRequested_;
    }
    // A USB bus reset: the device goes back to dfuIDLE
    void usbReset();
@@ -151,6 +168,13 @@ class Protocol {
    Status status_ = Status::ok;
    bool workPending_ = false;
    bool workReady_ = false;
+   // A valid image is in the flash, from the manifestation until the next
+   // download. startPending_: the next status stage starts the application.
+   bool manifested_ = false;
+   bool startPending_ = false;
+   bool resetRequested_ = false;
+   // The last block was shorter than transferSize: only the end follows
+   bool shortBlock_ = false;
    // The next block of the download, its size, and the end of the erased
    // area of this download
    uint16_t nextBlock_ = 0;

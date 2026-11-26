@@ -31,6 +31,9 @@ bool Protocol::beginDownload(uint16_t block, uint16_t length) {
       }
       nextBlock_ = 0;
       erasedEnd_ = config_.start;
+      shortBlock_ = false;
+      // The download erases the image that the manifestation checked
+      manifested_ = startPending_ = false;
    } else if(state_ != State::dnloadIdle) {
       stall();
       return false;
@@ -40,11 +43,12 @@ bool Protocol::beginDownload(uint16_t block, uint16_t length) {
       return true;
    }
    const uint32_t address = config_.start + uint32_t{ block } * transferSize;
-   if(block != nextBlock_ || length > transferSize || address >= config_.end || length > config_.end - address) {
-      fail(block != nextBlock_ || length > transferSize ? Status::errStalledPkt : Status::errAddress);
+   if(block != nextBlock_ || length > transferSize || shortBlock_ || address >= config_.end || length > config_.end - address) {
+      fail(block != nextBlock_ || length > transferSize || shortBlock_ ? Status::errStalledPkt : Status::errAddress);
       return false;
    }
    blockSize_ = length;
+   shortBlock_ = length < transferSize;
    return true;
 }
 
@@ -53,7 +57,8 @@ void Protocol::endDownload() {
 }
 
 int Protocol::upload(uint16_t block, uint16_t length, std::span<uint8_t> out) {
-   if((state_ != State::idle && state_ != State::uploadIdle) || length > out.size() || length > transferSize) {
+   // Block n is at n * transferSize, so each request must have that size
+   if((state_ != State::idle && state_ != State::uploadIdle) || length != transferSize || out.size() < transferSize) {
       stall();
       return -1;
    }
@@ -81,6 +86,9 @@ void Protocol::getStatus(uint8_t (&reply)[6]) {
       pollMs = config_.blockPollMs;
    } else if(state_ == State::manifest) {
       pollMs = config_.manifestPollMs;
+   } else if(state_ == State::idle && manifested_) {
+      // dfu-util ends the download with this reply
+      startPending_ = true;
    }
    reply[0] = static_cast<uint8_t>(status_);
    reply[1] = static_cast<uint8_t>(pollMs);
@@ -116,11 +124,13 @@ bool Protocol::abort() {
 }
 
 void Protocol::usbReset() {
-   if(state_ != State::manifestWaitReset) {
-      state_ = State::idle;
-      status_ = Status::ok;
-   }
+   state_ = State::idle;
+   status_ = Status::ok;
    workPending_ = workReady_ = false;
+   // dfu-util -R resets the bus after the download
+   if(manifested_) {
+      resetRequested_ = true;
+   }
 }
 
 void Protocol::runWork() {
@@ -135,7 +145,8 @@ void Protocol::runWork() {
       }
    } else if(state_ == State::manifest) {
       if(manifest()) {
-         state_ = State::manifestWaitReset;
+         state_ = State::idle;
+         manifested_ = true;
       }
    }
 }

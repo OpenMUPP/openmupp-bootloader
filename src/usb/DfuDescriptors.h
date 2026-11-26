@@ -41,9 +41,11 @@ inline constexpr uint8_t device[18] = {
 };
 // clang-format on
 
-// bitCanDnload, bitCanUpload, bitWillDetach. bitManifestationTolerant is
-// clear: after the manifestation the device resets into the application.
-constexpr uint8_t dfuAttributes = 0x01 | 0x02 | 0x08;
+// bitCanDnload, bitCanUpload, bitManifestationTolerant: after the
+// manifestation the device answers GETSTATUS with dfuIDLE, as dfu-util 0.11
+// needs for a clean end (protocol/DfuProtocol.h). bitWillDetach is clear:
+// the device has no DFU_DETACH, and dfu-util -R resets the bus instead.
+constexpr uint8_t dfuAttributes = 0x01 | 0x02 | 0x04;
 
 // clang-format off
 inline constexpr uint8_t configuration[27] = {

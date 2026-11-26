@@ -49,8 +49,10 @@ struct Fixture {
       CHECK(reply[0] == static_cast<uint8_t>(Status::ok));
    }
 
-   void manifest() {
-      REQUIRE(protocol.beginDownload(0, 0));
+   // The zero-length DNLOAD at block (the next block number of dfu-util),
+   // GETSTATUS (manifest), status stage, work
+   void manifest(uint16_t block = 0) {
+      REQUIRE(protocol.beginDownload(block, 0));
       CHECK(status()[4] == static_cast<uint8_t>(State::manifest));
       CHECK(reply[1] == 10);
       protocol.requestDone();
@@ -72,9 +74,16 @@ TEST_CASE("A download writes the blocks in order and the manifestation starts th
    f.download(0, first);
    f.download(1, second);
    f.download(2, last);
-   f.manifest();
+   f.manifest(3);
 
-   CHECK(f.protocol.state() == State::manifestWaitReset);
+   // dfu-util reads the end of the manifestation: dfuIDLE, OK. The
+   // application starts only after the status stage of that request.
+   CHECK(f.protocol.state() == State::idle);
+   CHECK_FALSE(f.protocol.resetRequested());
+   CHECK(f.status()[4] == static_cast<uint8_t>(State::idle));
+   CHECK(f.reply[0] == static_cast<uint8_t>(Status::ok));
+   CHECK_FALSE(f.protocol.resetRequested());
+   f.protocol.requestDone();
    CHECK(f.protocol.resetRequested());
    CHECK(f.flash.checks == 1);
    CHECK(f.flash.violations == 0);
@@ -180,9 +189,11 @@ TEST_CASE("An image that is not valid gives errVERIFY and no reset") {
    Fixture f;
    f.flash.valid = false;
    f.download(0, pattern(64));
-   f.manifest();
+   f.manifest(1);
    CHECK(f.protocol.state() == State::error);
    CHECK(f.status()[0] == static_cast<uint8_t>(Status::errVerify));
+   f.protocol.requestDone();
+   f.protocol.usbReset();
    CHECK_FALSE(f.protocol.resetRequested());
 }
 
@@ -199,10 +210,9 @@ TEST_CASE("An upload reads the application area and ends with a short block") {
    }
    CHECK(f.protocol.upload(areaSize / 1024, 1024, out) == 0);
    CHECK(f.protocol.state() == State::idle);
-   SUBCASE("A short request also ends the upload") {
-      CHECK(f.protocol.upload(0, 1024, out) == 1024);
-      CHECK(f.protocol.upload(7, 1024, out) == 1024);
-      CHECK(f.protocol.state() == State::uploadIdle);
+   SUBCASE("A request with another size than wTransferSize stalls") {
+      CHECK(f.protocol.upload(0, 512, out) == -1);
+      CHECK(f.protocol.state() == State::error);
    }
    SUBCASE("No upload while a download runs") {
       f.download(0, pattern(4));
@@ -235,4 +245,57 @@ TEST_CASE("ABORT in dfuERROR stalls, CLRSTATUS outside dfuERROR stalls") {
    CHECK(f.protocol.state() == State::error);
    CHECK_FALSE(f.protocol.abort());
    CHECK(f.protocol.clearStatus());
+}
+
+TEST_CASE("Only the last block of a download can be shorter than wTransferSize") {
+   Fixture f;
+   f.download(0, pattern(1024));
+   f.download(1, pattern(512));
+   SUBCASE("A block after the short block stalls") {
+      CHECK_FALSE(f.protocol.beginDownload(2, 512));
+      CHECK(f.protocol.state() == State::error);
+      CHECK(f.status()[0] == static_cast<uint8_t>(Status::errStalledPkt));
+   }
+   SUBCASE("The end of the download is accepted") {
+      f.manifest(2);
+      CHECK(f.protocol.state() == State::idle);
+      CHECK(f.flash.checks == 1);
+   }
+}
+
+TEST_CASE("A bus reset after a valid manifestation starts the application (dfu-util -R)") {
+   Fixture f;
+   f.download(0, pattern(64));
+   f.manifest(1);
+   SUBCASE("After a stalled DFU_DETACH") {
+      f.protocol.stall();
+   }
+   SUBCASE("Without the final GETSTATUS") {
+   }
+   CHECK_FALSE(f.protocol.resetRequested());
+   f.protocol.usbReset();
+   CHECK(f.protocol.resetRequested());
+}
+
+TEST_CASE("A new download clears the valid manifestation") {
+   Fixture f;
+   f.download(0, pattern(64));
+   f.manifest(1);
+   f.download(0, pattern(64, 4));
+   f.protocol.abort();
+   f.status();
+   f.protocol.requestDone();
+   f.protocol.usbReset();
+   CHECK_FALSE(f.protocol.resetRequested());
+}
+
+TEST_CASE("Config::valid() refuses an area that a page can leave") {
+   using dfu::Config;
+   CHECK(Config{ 0x0800'2000, 0x0804'0000, 256, 20, 20 }.valid());
+   CHECK(Config{ 0x0800'2000, 0x0802'0000, 1024, 80, 10 }.valid());
+   CHECK(Config{ 0x0800'2000, 0x0802'0000, 2048, 80, 10 }.valid());
+   CHECK_FALSE(Config{ 0x0800'2400, 0x0804'0000, 4096, 20, 20 }.valid()); // start inside a page
+   CHECK_FALSE(Config{ 0x0800'2000, 0x0803'FF00, 1024, 20, 20 }.valid()); // end inside a page
+   CHECK_FALSE(Config{ 0x0800'2000, 0x0804'0000, 768, 20, 20 }.valid());  // 768 and 1024
+   CHECK_FALSE(Config{ 0x0800'2000, 0x0800'2000, 256, 20, 20 }.valid());  // empty
 }

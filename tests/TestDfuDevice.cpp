@@ -160,7 +160,10 @@ TEST_CASE("Enumeration: descriptors, address and configuration") {
    CHECK(d.data[3] == 0x02);
    CHECK(d.data[7] == 64);
 
-   REQUIRE(h.out(0x00, 0x05, 0x23, 0));
+   // SET_ADDRESS: the status stage still uses address 0
+   h.setupPacket(0x00, 0x05, 0x23, 0, 0);
+   CHECK(h.hw.address == 0);
+   CHECK(h.takeIn().empty());
    CHECK(h.hw.address == 0x23);
 
    auto c = h.in(0x80, 0x06, 0x0200, 0, 9);
@@ -204,7 +207,12 @@ TEST_CASE("Windows reads the BOS and the MS OS 2.0 descriptor set") {
    const uint16_t setLength = static_cast<uint16_t>(bos.data[5 + 24] | bos.data[5 + 25] << 8);
    const auto set = h.in(0xC0, vendorCode, 0, 7, setLength);
    REQUIRE(set.data.size() == setLength);
-   CHECK(Bytes(set.data.begin() + 14, set.data.begin() + 20) == Bytes{ 'W', 'I', 'N', 'U', 'S', 'B' });
+   // The full bytes: a wrong UUID or length makes Windows ignore them
+   CHECK(bos.data == Bytes{ 5,    15,   33,   0,    1,    28,   16,   5,    0,    0xDF, 0x60,
+                            0xDD, 0xD8, 0x89, 0x45, 0xC7, 0x4C, 0x9C, 0xD2, 0x65, 0x9D, 0x9E,
+                            0x64, 0x8A, 0x9F, 0x00, 0x00, 0x03, 0x06, 30,   0,    0x20, 0 });
+   CHECK(set.data ==
+         Bytes{ 10, 0, 0, 0, 0, 0, 3, 6, 30, 0, 20, 0, 3, 0, 'W', 'I', 'N', 'U', 'S', 'B', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
    // Another wIndex stalls
    CHECK(h.in(0xC0, vendorCode, 0, 4, 16).stalled);
 }
@@ -230,13 +238,23 @@ TEST_CASE("dfu-util -D: download, status polls and manifestation") {
       CHECK(s.data[4] == static_cast<uint8_t>(State::dnloadIdle));
       CHECK(s.data[0] == 0);
    }
+   // dfu-util 0.11: the zero-length DNLOAD with the next block number,
+   // GETSTATUS until the state is dfuIDLE
    REQUIRE(h.out(0x21, dfu::request::dnload, block, 0));
    auto s = h.getStatus();
    CHECK(s.data[4] == static_cast<uint8_t>(State::manifest));
+   CHECK(s.data[1] == 10);
    h.protocol.runWork();
+   CHECK_FALSE(h.protocol.resetRequested());
+   h.setupPacket(0xA1, dfu::request::getStatus, 0, 0, 6);
+   const Bytes last = h.takeIn();
+   REQUIRE(last.size() == 6);
+   CHECK(last[4] == static_cast<uint8_t>(State::idle));
+   CHECK(last[0] == 0);
+   // The application starts only after the status stage of this request
+   CHECK_FALSE(h.protocol.resetRequested());
+   h.device.out(nullptr, 0);
    CHECK(h.protocol.resetRequested());
-   s = h.getStatus();
-   CHECK(s.data[4] == static_cast<uint8_t>(State::manifestWaitReset));
 
    for(std::size_t i = 0; i < image.size(); ++i) {
       REQUIRE(h.flash.at(start + static_cast<uint32_t>(i)) == image[i]);
