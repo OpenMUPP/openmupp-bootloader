@@ -98,6 +98,12 @@ dfu-util -d 1209:0001 -D openmupp-app-8k.bin
 - Windows binds WinUSB through MS OS 2.0 descriptors.
 - The bootloader erases 4 KB sectors. Each sector erase takes about 16 ms.
 
+Link the application at `0x00002000`, the flash alias of `0x08002000`, with
+the reset jump (`j _start`) at offset 0. The bootloader jumps to the alias.
+The startup code loads `gp` and `sp` relative to the PC, so an image that
+is linked at `0x08002000` gets wrong pointers. The stamp tool refuses such
+an image.
+
 The key of OpenMUPP v1 is on BOOT0. A key that is down at a reset starts
 the ROM ISP bootloader of WCH (`4348:55e0`, `wchisp`), not this bootloader.
 Thus the ROM bootloader is the recovery path when this bootloader is
@@ -390,10 +396,13 @@ each start. 56 KB take some ms.
 
 The header uses the reserved words of the Cortex-M3 vector table, at the
 start of the application. A CH32V307 image starts with the `j _start` of
-the reset handler, and its vector table follows at offset 4. The same
-offsets are then reserved exceptions of the QingKe V4F, so the header has
-the same place. The CH32V307 bootloader uses its CRC unit, which gives the
-same CRC as the STM32F1 unit.
+the reset handler, and its vector table follows at offset 4. The header
+has the same offsets there. On the QingKe V4F, `0x1C` and `0x28` are
+reserved exceptions. `0x20` is the Ecall-U entry and `0x24` is the
+BreakPoint entry. The firmware runs in machine mode, so it does not use
+Ecall-U. The firmware must not use a BreakPoint handler: without a
+debugger, an `ebreak` jumps to the CRC value. The CH32V307 bootloader
+uses its CRC unit, which gives the same CRC as the STM32F1 unit.
 
 | Offset | Content |
 |---|---|
@@ -430,7 +439,9 @@ An application is valid when all of these rules are true:
 `tools/mupp-stamp-image.py` adds the header to an ELF image. It needs
 Python 3.7 or later and the objcopy of the toolchain
 (`arm-none-eabi-objcopy` or `riscv-none-elf-objcopy`), and no other
-packages. It takes the architecture from the ELF header. For `--check` of a
+packages. It takes the architecture from the ELF header, and selects the
+objcopy for that architecture. Use `--objcopy` for an objcopy that is not
+in `PATH`. For `--check` of a
 CH32V307 image, add `--arch riscv`.
 
 ```sh
@@ -452,7 +463,8 @@ STM32F103x8 (64 KB flash) is 57344 bytes (56 KB).
   bytes (erased flash). The `.bin` and `.hex` files include these bytes.
 - The `.bin` and `.hex` files contain `0xFF` in the gaps between
   sections, as the CRC does.
-- Without `--max-length`, the tool refuses an image larger than 128 KB.
+- Without `--max-length`, the tool refuses an image larger than 128 KB
+  (Cortex-M3) or 256 KB (RISC-V).
   For example, a section in RAM without a load address in flash gives a
   very large image.
 

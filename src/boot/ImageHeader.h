@@ -9,8 +9,10 @@
 // The header is in reserved words of the vector table. On the Cortex-M3,
 // they are the reserved exception vectors 7 to 10. On the CH32V307, the
 // image starts with the "j _start" of the reset handler, and the vector
-// table follows at offset 4. The same offsets are then the reserved
-// exceptions 6 to 9 of the QingKe V4F, which the core never uses.
+// table follows at offset 4. There, 0x1C and 0x28 are reserved exceptions
+// of the QingKe V4F, 0x20 is Ecall-U and 0x24 is BreakPoint. The firmware
+// runs in machine mode (no Ecall-U) and has no BreakPoint handler: an
+// ebreak without a debugger jumps to the CRC value.
 //
 // | Offset | Content                                                  |
 // |--------|----------------------------------------------------------|

@@ -200,7 +200,6 @@ PROJECT = os.path.join(ROOT, "tools", "tests", "stamp-project")
 CMAKE = shutil.which("cmake")
 
 
-@unittest.skipUnless(GCC and OBJCOPY, "arm-none-eabi-gcc and arm-none-eabi-objcopy not found")
 def jal(imm):
     """RISC-V JAL x0 ("j") with an even offset of 0 to 1 MiB - 2."""
     return (((imm >> 20) & 0x1) << 31 | ((imm >> 1) & 0x3FF) << 21 | ((imm >> 11) & 0x1) << 20
@@ -267,25 +266,36 @@ void start(void) { for(;;) {} }
 __attribute__((section(".isr_vector"), used)) void (*const vectors[16])(void) = { [1] = start, [11] = start };
 """
 
+    def link(self, tmp, origin="0x2000"):
+        script = os.path.join(tmp, "app.ld")
+        source = os.path.join(tmp, "app.c")
+        elf = os.path.join(tmp, "app.elf")
+        with open(script, "w") as f:
+            f.write(self.SCRIPT.replace("ORIGIN = 0x2000", f"ORIGIN = {origin}"))
+        with open(source, "w") as f:
+            f.write(self.SOURCE)
+        subprocess.run([RISCV_GCC, "-march=rv32imac_zicsr", "-mabi=ilp32", "-Os", "-nostdlib",
+                        "-T", script, source, "-o", elf], check=True)
+        return elf
+
     def test_stamps_a_riscv_elf(self):
         with tempfile.TemporaryDirectory() as tmp:
-            script = os.path.join(tmp, "app.ld")
-            source = os.path.join(tmp, "app.c")
-            elf = os.path.join(tmp, "app.elf")
+            elf = self.link(tmp)
             out = os.path.join(tmp, "app.bin")
-            with open(script, "w") as f:
-                f.write(self.SCRIPT)
-            with open(source, "w") as f:
-                f.write(self.SOURCE)
-            subprocess.run([RISCV_GCC, "-march=rv32imac_zicsr", "-mabi=ilp32", "-Os", "-nostdlib",
-                            "-T", script, source, "-o", elf], check=True)
-            self.assertEqual(tool.main([elf, "--objcopy", RISCV_OBJCOPY, "--bin", out]), 0)
+            # No --objcopy: the tool takes the RISC-V objcopy (in PATH) from the ELF.
+            self.assertEqual(tool.main([elf, "--bin", out]), 0)
             with open(out, "rb") as f:
                 stamped = f.read()
             self.assertEqual(struct.unpack_from("<I", stamped, 0x1C)[0], tool.MAGIC)
             self.assertEqual(tool.check(stamped, 0x2000, arch="riscv"), [])
 
+    def test_refuses_an_image_linked_at_0x08000000(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            elf = self.link(tmp, origin="0x08002000")
+            self.assertEqual(tool.main([elf, "--objcopy", RISCV_OBJCOPY]), 1)
 
+
+@unittest.skipUnless(GCC and OBJCOPY, "arm-none-eabi-gcc and arm-none-eabi-objcopy not found")
 class ElfTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

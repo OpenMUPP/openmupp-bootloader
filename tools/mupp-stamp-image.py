@@ -5,7 +5,12 @@
 The header uses reserved words of the vector table. On the Cortex-M3 they
 are reserved exception vectors. On the CH32V307 (RISC-V), the image starts
 with the "j _start" of the reset handler (.init) and the vector table
-follows at offset 4; the same offsets are reserved exceptions there.
+follows at offset 4. There, 0x1C and 0x28 are reserved exceptions, but
+0x20 is the Ecall-U entry and 0x24 the BreakPoint entry of the QingKe V4F.
+The firmware runs in machine mode (no ecall from user mode), and it must
+not depend on a BreakPoint handler: an ebreak without a debugger jumps to
+the CRC value. Link a RISC-V image at the flash alias (0x00002000), because
+the bootloader jumps there.
 
     0x1C  magic 0x314C5356 ("VSL1")
     0x20  image length in bytes, a multiple of 4, from the application start
@@ -50,6 +55,9 @@ MIN_LENGTH = 64
 # example a section in RAM without a load address.
 MAX_FLASH = {"cortex-m3": 128 * 1024, "riscv": 256 * 1024}
 ARCHES = ("cortex-m3", "riscv")
+OBJCOPY = {"cortex-m3": "arm-none-eabi-objcopy", "riscv": "riscv-none-elf-objcopy"}
+# The CH32V307 maps the flash at 0x08000000 and at the alias 0x00000000.
+RISCV_FLASH_BASE = 0x08000000
 # e_machine of the ELF header
 EM_ARM = 0x28
 EM_RISCV = 0xF3
@@ -235,16 +243,22 @@ def elf_arch(elf_data):
     raise StampError(f"the ELF machine 0x{machine:X} is not Arm or RISC-V")
 
 
-def stamp_elf(elf, objcopy, bin_out=None, hex_out=None, max_length=None):
+def stamp_elf(elf, objcopy=None, bin_out=None, hex_out=None, max_length=None):
     """Write the header into the .isr_vector section of the ELF file."""
     with open(elf, "rb") as f:
         elf_data = f.read()
     arch = elf_arch(elf_data)
+    objcopy = objcopy or OBJCOPY[arch]
     sections = _loaded_sections(elf_data)
     if VECTOR_SECTION not in sections:
         raise StampError(f"the ELF file has no {VECTOR_SECTION} section")
     vectors_address, size = sections[VECTOR_SECTION]
     address = min(lma for lma, _ in sections.values())
+    # The bootloader jumps to the alias. The startup code loads gp and sp
+    # PC-relative, so an image linked at 0x08000000 gets wrong pointers.
+    if arch == "riscv" and address >= RISCV_FLASH_BASE:
+        raise StampError(f"the RISC-V image is linked at 0x{address:08X}: link it at the flash alias "
+                         f"(below 0x{RISCV_FLASH_BASE:08X})")
     # The Cortex-M3 image starts with the vector table. The RISC-V image
     # starts with the reset jump, and the vector table follows.
     offset = vectors_address - address
@@ -317,8 +331,8 @@ def main(argv=None):
     parser.add_argument("image", help="ELF file to stamp, or the .bin file with --check")
     parser.add_argument("--bin", help="write the stamped image as a binary file")
     parser.add_argument("--hex", help="write the stamped image as an Intel HEX file")
-    parser.add_argument("--objcopy", default="arm-none-eabi-objcopy",
-                        help="objcopy tool (default: %(default)s)")
+    parser.add_argument("--objcopy",
+                        help="objcopy tool (default: arm-none-eabi-objcopy or riscv-none-elf-objcopy, from the ELF)")
     parser.add_argument("--max-length", type=_int,
                         help="size of the application area in bytes")
     parser.add_argument("--check", action="store_true",
