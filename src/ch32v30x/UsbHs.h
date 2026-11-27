@@ -34,12 +34,12 @@ class UsbHs {
    void poll(Device &device) {
       const uint8_t flags = USBHSD->INT_FG;
       if(flags & USBHS_UIF_BUS_RST) {
-         USBHSD->INT_FG = USBHS_UIF_BUS_RST | USBHS_UIF_TRANSFER | USBHS_UIF_SETUP_ACT;
+         // Keep SETUP_ACT: the first SETUP after the reset can be in the
+         // buffer already when the flash work delayed this poll.
+         USBHSD->INT_FG = USBHS_UIF_BUS_RST | USBHS_UIF_TRANSFER;
          resetEp0();
          device.busReset();
-         return;
-      }
-      if(flags & USBHS_UIF_TRANSFER) {
+      } else if(flags & USBHS_UIF_TRANSFER) {
          // INT_ST first: a SETUP that completes after this read shows in
          // INT_FG, and its OUT token must not count as data.
          const uint8_t status = USBHSD->INT_ST;
