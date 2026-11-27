@@ -16,6 +16,7 @@ The old name of this project is versaloon-bootloader.
 | OtherUse | `otheruse` | 12 MHz | PA2 | PA15 (red), on when low | PB9 |
 | ST-Link/V2-1 of a Nucleo-64 board | `stlinkv21` | 8 MHz | PA15 | PA9: high is red, low is green | PA10 (SWO) |
 | ST-Link/V2 mini clone (USB stick) | `stlinkv2miniclone` | 8 MHz | Fixed | PA9: high is blue, low is red | PB7 (SWIM) |
+| OpenMUPP v1 (CH32V307) | `openmuppv1` | 8 MHz | Internal (USBHS) | PA10 (red), PA9 (green), on when high | None, see [OpenMUPP v1](#openmupp-v1-ch32v307) |
 
 The pull-up pin is high when the USB device is connected.
 The key is down when PB9 is low.
@@ -73,6 +74,56 @@ The bootloader is tested on one mini clone. The boot request, the key,
 the D+ disconnect, and a write and GO with `stm32flash` pass. The MCU of
 that board has ST markings, but it is an STM32F103 compatible MCU, not a
 genuine STM32F103.
+
+## OpenMUPP v1 (CH32V307)
+
+The bootloader of OpenMUPP v1 is a USB DFU 1.1 device (Device Firmware
+Upgrade). It is not an AN3155 device. The host tool is `dfu-util`:
+
+```sh
+dfu-util -d 1209:0001 -D openmupp-app-8k.bin
+```
+
+- USB ID: `1209:0001`, product "OpenMUPP Bootloader". The serial number is
+  the chip UID, as in the firmware.
+- One alternate setting, "Application". Block n is at `0x08002000 + n x
+  1024`. The host cannot select an address, so it cannot write the
+  bootloader area or the settings page of the firmware.
+- After a download, the bootloader checks the image header and the CRC.
+  With a valid image, it starts the application. With an image that is not
+  valid, it reports `errVERIFY` and stays in DFU mode.
+- `dfu-util -U` reads the application area.
+- USBHS runs at full speed. The bootloader polls EP0. It has no other
+  endpoint and no interrupt.
+- Windows binds WinUSB through MS OS 2.0 descriptors.
+
+The key of OpenMUPP v1 is on BOOT0. A key that is down at a reset starts
+the ROM ISP bootloader of WCH (`4348:55e0`, `wchisp`), not this bootloader.
+Thus the ROM bootloader is the recovery path when this bootloader is
+damaged. The application starts this bootloader with the boot request
+(see [Start the bootloader from the application](#start-the-bootloader-from-the-application)):
+`0xB007` in `BKP_DATAR1`, then a system reset.
+
+The bootloader is 5.3 KB of the 8 KB area. The application area ends at
+the end of the zero-wait flash (256 KB with the default user option
+`CODE-256KB + RAM-64KB`). The bootloader does not set a write protection
+yet.
+
+Build it with the RISC-V toolchain (xPack `riscv-none-elf-gcc`) and the
+preset `openmuppv1`. The build gets `ch32v00x-system` from the submodule
+`dependencies/ch32v00x-system`:
+
+```sh
+RISCV_GCC_TOOLCHAIN_PREFIX=<toolchain root> cmake --preset openmuppv1
+cmake --build --preset openmuppv1
+```
+
+On Linux, the user needs access to the device, for example with this udev
+rule:
+
+```text
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP Bootloader", MODE="0660", TAG+="uaccess"
+```
 
 ## Memory layout
 
@@ -337,7 +388,11 @@ The bootloader calculates the CRC with the CRC unit of the STM32F1, at
 each start. 56 KB take some ms.
 
 The header uses the reserved words of the Cortex-M3 vector table, at the
-start of the application:
+start of the application. A CH32V307 image starts with the `j _start` of
+the reset handler, and its vector table follows at offset 4. The same
+offsets are then reserved exceptions of the QingKe V4F, so the header has
+the same place. The CH32V307 bootloader uses its CRC unit, which gives the
+same CRC as the STM32F1 unit.
 
 | Offset | Content |
 |---|---|
@@ -364,13 +419,18 @@ An application is valid when all of these rules are true:
 - The length is a multiple of 4, between 64 bytes and the size of the
   application area.
 - The CRC is correct.
-- The initial stack pointer (word `0x00`) is in RAM.
-- The reset vector (word `0x04`) is odd and inside the image.
+- Cortex-M3: the initial stack pointer (word `0x00`) is in RAM, and the
+  reset vector (word `0x04`) is odd and inside the image.
+- RISC-V (CH32V307): word `0x00` is a `j` (JAL x0) to an address inside the
+  image, behind the header.
 
 ### Stamp tool
 
 `tools/mupp-stamp-image.py` adds the header to an ELF image. It needs
-Python 3.7 or later and `arm-none-eabi-objcopy`, and no other packages.
+Python 3.7 or later and the objcopy of the toolchain
+(`arm-none-eabi-objcopy` or `riscv-none-elf-objcopy`), and no other
+packages. It takes the architecture from the ELF header. For `--check` of a
+CH32V307 image, add `--arch riscv`.
 
 ```sh
 tools/mupp-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 57344
