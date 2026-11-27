@@ -43,9 +43,11 @@ using namespace ch32;
 // The DFU work of one block, measured on OpenMUPP v1 with the cycle counter
 // (issue #8): four page writes and the read-back take 3.22 ms. Each fourth
 // block also erases a 4 KB sector: 11.87 ms in total (8.64 ms erase). The
-// poll times are about 25 % above these values. The datasheet (CH32V307DS0
-// table 4-20) gives only typical values (16 ms erase, 2 ms page write). The
-// CRC of 248 KB takes about 2 ms.
+// poll times are 15 ms and 5 ms, a little above these values. A shorter
+// poll time is not an error: the hardware NAKs the next GETSTATUS until
+// the work is done. Do not go back to the datasheet values (CH32V307DS0
+// table 4-20, typical only: 16 ms erase, 2 ms page write); they make each
+// download slower. The CRC of 248 KB takes about 2 ms.
 constexpr dfu::Config dfuConfig{ layout::applicationStart, memory::applicationEnd, memory::pageSize, 5, 15, 20 };
 static_assert(dfuConfig.valid());
 
