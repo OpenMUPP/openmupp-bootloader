@@ -48,7 +48,7 @@ struct FakeHw {
 struct Host {
    Host()
       : flash{ start, areaSize, 1024 }
-      , protocol{ { start, start + areaSize, 1024, 80, 10 }, flash, flash, flash }
+      , protocol{ { start, start + areaSize, 1024, 20, 80, 10 }, flash, flash, flash }
       , serial{ { 0xF7, 0xC8, 0x8C, 0xAD, 0xF8, 0x50, 0x7B, 0xC7, 0x39, 0xE3, 0x39, 0xE3 } }
       , device{ hw, protocol, serial.bytes } {
       device.busReset();

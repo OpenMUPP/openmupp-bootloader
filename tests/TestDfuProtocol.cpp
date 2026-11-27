@@ -28,7 +28,7 @@ std::vector<uint8_t> pattern(std::size_t size, uint8_t seed = 1) {
 struct Fixture {
    explicit Fixture(uint32_t pageSize = 1024)
       : flash{ start, areaSize, pageSize }
-      , protocol{ { start, start + areaSize, pageSize, 80, 10 }, flash, flash, flash } {
+      , protocol{ { start, start + areaSize, pageSize, 20, 80, 10 }, flash, flash, flash } {
    }
 
    uint8_t (&status())[6] {
@@ -37,12 +37,13 @@ struct Fixture {
    }
 
    // DNLOAD, GETSTATUS (busy), status stage, work, GETSTATUS (idle)
-   void download(uint16_t block, const std::vector<uint8_t> &data) {
+   // pollMs: 80 for a block that erases, 20 for a block that only writes
+   void download(uint16_t block, const std::vector<uint8_t> &data, uint8_t pollMs = 80) {
       REQUIRE(protocol.beginDownload(block, static_cast<uint16_t>(data.size())));
       std::copy(data.begin(), data.end(), protocol.buffer().begin());
       protocol.endDownload();
       CHECK(status()[4] == static_cast<uint8_t>(State::dnBusy));
-      CHECK(reply[1] == 80);
+      CHECK(reply[1] == pollMs);
       protocol.requestDone();
       protocol.runWork();
       CHECK(status()[4] == static_cast<uint8_t>(State::dnloadIdle));
@@ -108,6 +109,30 @@ TEST_CASE("With 256-byte pages, a block erases the four pages under it") {
    f.download(1, pattern(100));
    CHECK(f.flash.erasedPages == std::vector<uint32_t>{ start, start + 256, start + 512, start + 768, start + 1024 });
    CHECK(f.flash.violations == 0);
+}
+
+TEST_CASE("Only a block that starts in a page that is not erased reports the erase poll time") {
+   // Four blocks in a 4 KB sector: the first erases it, the other three
+   // only write
+   Fixture f{ 4096 };
+   f.download(0, pattern(1024), 80);
+   f.download(1, pattern(1024), 20);
+   f.download(2, pattern(1024), 20);
+   f.download(3, pattern(1024), 20);
+   f.download(4, pattern(1024), 80);
+   f.download(5, pattern(100), 20);
+   CHECK(f.flash.erasedPages == std::vector<uint32_t>{ start, start + 4096 });
+   CHECK(f.flash.violations == 0);
+}
+
+TEST_CASE("A GETSTATUS in dfuDNBUSY repeats the poll time of the block") {
+   Fixture f{ 4096 };
+   f.download(0, pattern(1024));
+   REQUIRE(f.protocol.beginDownload(1, 1024));
+   f.protocol.endDownload();
+   CHECK(f.status()[1] == 20);
+   CHECK(f.status()[4] == static_cast<uint8_t>(State::dnBusy));
+   CHECK(f.reply[1] == 20);
 }
 
 TEST_CASE("The flash work runs only after the status stage of GETSTATUS") {
@@ -291,11 +316,11 @@ TEST_CASE("A new download clears the valid manifestation") {
 
 TEST_CASE("Config::valid() refuses an area that a page can leave") {
    using dfu::Config;
-   CHECK(Config{ 0x0800'2000, 0x0804'0000, 256, 20, 20 }.valid());
-   CHECK(Config{ 0x0800'2000, 0x0802'0000, 1024, 80, 10 }.valid());
-   CHECK(Config{ 0x0800'2000, 0x0802'0000, 2048, 80, 10 }.valid());
-   CHECK_FALSE(Config{ 0x0800'2400, 0x0804'0000, 4096, 20, 20 }.valid()); // start inside a page
-   CHECK_FALSE(Config{ 0x0800'2000, 0x0803'FF00, 1024, 20, 20 }.valid()); // end inside a page
-   CHECK_FALSE(Config{ 0x0800'2000, 0x0804'0000, 768, 20, 20 }.valid());  // 768 and 1024
-   CHECK_FALSE(Config{ 0x0800'2000, 0x0800'2000, 256, 20, 20 }.valid());  // empty
+   CHECK(Config{ 0x0800'2000, 0x0804'0000, 256, 20, 40, 20 }.valid());
+   CHECK(Config{ 0x0800'2000, 0x0802'0000, 1024, 20, 80, 10 }.valid());
+   CHECK(Config{ 0x0800'2000, 0x0802'0000, 2048, 20, 80, 10 }.valid());
+   CHECK_FALSE(Config{ 0x0800'2400, 0x0804'0000, 4096, 20, 40, 20 }.valid()); // start inside a page
+   CHECK_FALSE(Config{ 0x0800'2000, 0x0803'FF00, 1024, 20, 40, 20 }.valid()); // end inside a page
+   CHECK_FALSE(Config{ 0x0800'2000, 0x0804'0000, 768, 20, 40, 20 }.valid());  // 768 and 1024
+   CHECK_FALSE(Config{ 0x0800'2000, 0x0800'2000, 256, 20, 40, 20 }.valid());  // empty
 }
