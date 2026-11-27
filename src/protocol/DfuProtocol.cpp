@@ -76,14 +76,14 @@ void Protocol::getStatus(uint8_t (&reply)[6]) {
    uint32_t pollMs = 0;
    if(state_ == State::dnloadSync) {
       state_ = State::dnBusy;
-      pollMs = config_.blockPollMs;
+      pollMs = blockPollMs();
       workPending_ = true;
    } else if(state_ == State::manifestSync) {
       state_ = State::manifest;
       pollMs = config_.manifestPollMs;
       workPending_ = true;
    } else if(state_ == State::dnBusy) {
-      pollMs = config_.blockPollMs;
+      pollMs = blockPollMs();
    } else if(state_ == State::manifest) {
       pollMs = config_.manifestPollMs;
    } else if(state_ == State::idle && manifested_) {
@@ -151,6 +151,14 @@ void Protocol::runWork() {
    }
 }
 
+uint32_t Protocol::blockEnd() const {
+   return config_.start + uint32_t{ nextBlock_ } * transferSize + ((blockSize_ + 3u) & ~3u);
+}
+
+uint32_t Protocol::blockPollMs() const {
+   return blockEnd() > erasedEnd_ ? config_.erasePollMs : config_.blockPollMs;
+}
+
 bool Protocol::write() {
    const uint32_t address = config_.start + uint32_t{ nextBlock_ } * transferSize;
    // The flash writes words: fill the last word of a short block with 0xFF,
@@ -159,7 +167,7 @@ bool Protocol::write() {
    while(size % 4 != 0) {
       buffer_[size++] = 0xFF;
    }
-   const uint32_t end = address + size;
+   const uint32_t end = blockEnd();
    // The blocks come in order, so the pages below erasedEnd_ are erased in
    // this download. A block can end inside a page; the next block then
    // starts in an erased page.

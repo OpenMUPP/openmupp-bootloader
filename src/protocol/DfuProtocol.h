@@ -101,9 +101,11 @@ struct Config {
    // The erase unit of the flash. A multiple of 4, and transferSize is a
    // multiple of it or it is a multiple of transferSize.
    uint32_t pageSize;
-   // bwPollTimeout for the erase and the write of one block, and for the
+   // bwPollTimeout for the write of one block, for the erase and the write
+   // of a block that starts in a page that is not erased yet, and for the
    // check of the image.
    uint32_t blockPollMs;
+   uint32_t erasePollMs;
    uint32_t manifestPollMs;
 };
 
@@ -158,6 +160,9 @@ class Protocol {
    private:
    void fail(Status status);
    bool write();
+   // The end of the next block, its size rounded up to a word
+   uint32_t blockEnd() const;
+   uint32_t blockPollMs() const;
    bool manifest();
 
    Config config_;
