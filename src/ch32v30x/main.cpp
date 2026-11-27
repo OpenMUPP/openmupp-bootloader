@@ -40,12 +40,13 @@ namespace {
 
 using namespace ch32;
 
-// The DFU work of one block (CH32V307DS0 table 4-20, typical): four page
-// writes of 2 ms, 8 ms plus a margin. Each fourth block also starts a 4 KB
-// sector erase of 16 ms: 24 ms, plus a margin. The CRC of 248 KB takes
-// about 2 ms. Not measured on the board yet: these values come from the
-// typical values of the datasheet (it gives no maximum).
-constexpr dfu::Config dfuConfig{ layout::applicationStart, memory::applicationEnd, memory::pageSize, 12, 30, 20 };
+// The DFU work of one block, measured on OpenMUPP v1 with the cycle counter
+// (issue #8): four page writes and the read-back take 3.22 ms. Each fourth
+// block also erases a 4 KB sector: 11.87 ms in total (8.64 ms erase). The
+// poll times are about 25 % above these values. The datasheet (CH32V307DS0
+// table 4-20) gives only typical values (16 ms erase, 2 ms page write). The
+// CRC of 248 KB takes about 2 ms.
+constexpr dfu::Config dfuConfig{ layout::applicationStart, memory::applicationEnd, memory::pageSize, 5, 15, 20 };
 static_assert(dfuConfig.valid());
 
 // The time that dfu-util needs to read the last GETSTATUS reply, and the
