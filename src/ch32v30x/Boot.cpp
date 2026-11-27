@@ -2,6 +2,9 @@
 
 #include "ch32v30x/Boot.h"
 
+#include <Bkp.h>
+#include <Crc_V30x.h>
+#include <peripherals/Rcc.h>
 #include <startup-hooks.h>
 #include <system_ch32v30x.h>
 #include <wch_device.h>
@@ -18,27 +21,26 @@ namespace ch32 {
 
 namespace {
 
-constexpr uint32_t decisionApb1Clocks = RCC_PWREN | RCC_BKPEN;
-
+// The CRC interface of image::isValid()
 class CrcUnit {
    public:
    void reset() {
-      CRC->CTLR = CRC_CTLR_RESET;
+      hw::Crc::reset();
    }
    void add(uint32_t word) {
-      CRC->DATAR = word;
+      hw::Crc::add(word);
    }
    uint32_t value() const {
-      return CRC->DATAR;
+      return hw::Crc::value();
    }
 };
 
 [[noreturn]] void startApplication() {
    // Peripherals back to the reset state. The CRC unit has no reset bit: a
    // reset of the calculation gives the reset value of CRC_DATAR.
-   CRC->CTLR = CRC_CTLR_RESET;
-   RCC->AHBPCENR &= ~RCC_CRCEN;
-   RCC->APB1PCENR &= ~decisionApb1Clocks;
+   hw::Crc::reset();
+   Rcc::disableCRCClock();
+   hw::Bkp::disable();
    // cpuInit() of the start-up set mtvec, mstatus and INTSYSCR. The
    // application sets them again; interrupts stay off until then. The
    // application is linked at its address in the flash alias at 0.
@@ -52,12 +54,6 @@ class CrcUnit {
 
 } // namespace
 
-void writeBackup(volatile uint16_t &reg, uint16_t value) {
-   PWR->CTLR |= PWR_CTLR_DBP;
-   reg = value;
-   PWR->CTLR &= ~PWR_CTLR_DBP;
-}
-
 bool ApplicationImage::isValid() const {
    CrcUnit crc;
    return image::isValid(reinterpret_cast<const uint32_t *>(layout::applicationStart), layout::applicationStart,
@@ -69,17 +65,17 @@ bool ApplicationImage::isValid() const {
 using namespace ch32;
 
 extern "C" void os_startup_initialize_hardware_early() {
-   RCC->APB1PCENR |= decisionApb1Clocks;
-   RCC->AHBPCENR |= RCC_CRCEN;
+   hw::Bkp::enable();
+   Rcc::enableCRCClock();
 
-   const auto dr1 = static_cast<uint16_t>(BKP->DATAR1);
-   const auto dr2 = static_cast<uint16_t>(BKP->DATAR2);
+   const uint16_t dr1 = hw::Bkp::readDR1();
+   const uint16_t dr2 = hw::Bkp::readDR2();
    // Each request has an effect for one reset only.
    if(dr1 == boot::bootRequest) {
-      writeBackup(BKP->DATAR1, 0);
+      hw::Bkp::writeDR1(0);
    }
    if(dr2 == boot::goToken) {
-      writeBackup(BKP->DATAR2, 0);
+      hw::Bkp::writeDR2(0);
    }
 
    const auto decision = boot::decide(dr1, dr2, [] { return false; }, [] { return ApplicationImage{}.isValid(); });

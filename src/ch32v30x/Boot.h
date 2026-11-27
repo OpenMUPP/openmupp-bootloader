@@ -17,17 +17,14 @@
 // OpenMUPP v1 is on BOOT0: a key that is down at the reset starts the ROM
 // bootloader of WCH, so the decision has no key.
 //
-// The decision leaves the clocks of PWR, BKP and CRC on in bootloader
-// mode. The functions below use them.
+// The decision leaves the clocks of PWR, BKP and CRC on and the backup
+// domain writable (hw::Bkp::enable()) in bootloader mode.
 
 #include <cstdint>
 
 #include "protocol/Hardware.h"
 
 namespace ch32 {
-
-// Writes a backup data register (BKP->DATARx keep their value over a reset).
-void writeBackup(volatile uint16_t &reg, uint16_t value);
 
 // The application image check with the CRC unit.
 class ApplicationImage : public protocol::Application {

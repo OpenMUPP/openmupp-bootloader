@@ -17,6 +17,10 @@
 //
 // The write protection of the bootloader area is not in this version.
 
+#include <Bkp.h>
+#include <peripherals/CycleCounter.h>
+#include <peripherals/GpioPin.h>
+#include <peripherals/Rcc.h>
 #include <peripherals/Uid.h>
 #include <startup-hooks.h>
 #include <system_ch32v30x.h>
@@ -51,24 +55,15 @@ constexpr uint32_t disconnectMs = 20;
 constexpr uint8_t usbLedPin = 9;
 constexpr uint8_t stateLedPin = 10;
 
-void configureLed(uint8_t pin) {
-   // CFGHR: pins 8 to 15. MODE 10 (2 MHz), CNF 00 (push-pull)
-   const uint32_t shift = 4u * (pin - 8u);
-   GPIOA->CFGHR = (GPIOA->CFGHR & ~(0xFu << shift)) | (0x2u << shift);
-}
+const hw::GpioPin usbLed{ GPIOA, usbLedPin };
+const hw::GpioPin stateLed{ GPIOA, stateLedPin };
 
-void setLed(uint8_t pin, bool on) {
-   GPIOA->BSHR = on ? 1u << pin : 1u << (pin + 16);
-}
-
-// The SysTick counts up at HCLK from start-up on (CH32FV2x_V3xRM 9.5.5).
-// CNT wraps after 2^32 / HCLK (30 s at 144 MHz), so the code compares
-// differences of cycles.
 template <typename Poll>
 void wait(uint32_t ms, Poll poll) {
+   // The counter wraps after 2^32 cycles (30 s at 144 MHz): compare differences
    const uint32_t cycles = ms * (SystemCoreClock / 1000);
-   const uint32_t start = SysTick->CNT;
-   while(SysTick->CNT - start < cycles) {
+   const uint32_t start = hw::CycleCounter::count();
+   while(hw::CycleCounter::count() - start < cycles) {
       poll();
    }
 }
@@ -80,8 +75,8 @@ void wait(uint32_t ms) {
 [[noreturn]] void restart(UsbHs &usb, uint16_t dr1, uint16_t dr2) {
    usb.stop();
    wait(disconnectMs);
-   writeBackup(BKP->DATAR1, dr1);
-   writeBackup(BKP->DATAR2, dr2);
+   hw::Bkp::writeDR1(dr1);
+   hw::Bkp::writeDR2(dr2);
    NVIC_SystemReset();
    __builtin_unreachable();
 }
@@ -99,21 +94,19 @@ extern "C" void HardFault_Handler() {
 
 void os_startup_initialize_hardware() {
    SystemCoreClockUpdate();
-   SysTick->CTLR = 0;
-   SysTick->CNT = 0;
-   SysTick->CTLR = (1u << 2) | (1u << 0); // STCLK: HCLK, STE: on, count up
+   hw::CycleCounter::start();
 
-   RCC->APB2PCENR |= RCC_IOPAEN;
-   setLed(usbLedPin, false);
-   setLed(stateLedPin, true);
-   configureLed(usbLedPin);
-   configureLed(stateLedPin);
+   Rcc::enableGPIOAClock();
+   usbLed.write(false);
+   stateLed.write(true);
+   usbLed.configure(hw::GpioPin::Mode::Output);
+   stateLed.configure(hw::GpioPin::Mode::Output);
 
    // SystemInit() keeps HSI when the crystal does not start
-   if((RCC->CFGR0 & RCC_SWS) != RCC_SWS_PLL) {
+   if(Rcc::getSystemClockSource() != Rcc::SystemClockSource::PLL) {
       for(bool on = false;; on = !on) {
-         setLed(usbLedPin, on);
-         setLed(stateLedPin, on);
+         usbLed.write(on);
+         stateLed.write(on);
          wait(250);
       }
    }
@@ -134,7 +127,7 @@ int main() {
    for(;;) {
       usbHs.poll(device);
       protocol.runWork();
-      setLed(usbLedPin, device.configured());
+      usbLed.write(device.configured());
       if(protocol.resetRequested()) {
          wait(drainMs, [&] { usbHs.poll(device); });
          restart(usbHs, 0, boot::goToken);
