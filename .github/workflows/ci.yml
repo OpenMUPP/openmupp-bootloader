@@ -67,6 +67,30 @@ jobs:
             build/${{ matrix.board }}/*.bin
           retention-days: 30
 
+  # The CH32V307 bootloader of OpenMUPP v1: the RISC-V toolchain of the image.
+  build-openmuppv1:
+    name: build openmuppv1
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - run: |
+          command -v riscv-none-elf-gcc || { echo "riscv-none-elf-gcc not found in the image"; exit 1; }
+          prefix=$(dirname "$(dirname "$(command -v riscv-none-elf-gcc)")")
+          cmake --preset openmuppv1 -DGCC_TOOLCHAIN_PREFIX="$prefix" -DMUPP_WERROR=ON
+          cmake --build --preset openmuppv1 -j$(nproc)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bootloader-openmuppv1-${{ github.sha }}
+          path: |
+            build/openmuppv1/*.elf
+            build/openmuppv1/*.hex
+            build/openmuppv1/*.bin
+          retention-days: 30
+
   test-host:
     runs-on: ubuntu-latest
     container: ghcr.io/armint/firmware-build-image:v1.15.0
