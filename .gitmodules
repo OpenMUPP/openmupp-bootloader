@@ -2,3 +2,7 @@
 	path = dependencies/system-stm32
 	url = https://github.com/armint/system-stm32.git
 	branch = main
+[submodule "dependencies/ch32v00x-system"]
+	path = dependencies/ch32v00x-system
+	url = https://github.com/armint/ch32v00x-system.git
+	branch = main

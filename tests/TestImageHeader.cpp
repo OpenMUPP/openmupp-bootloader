@@ -181,3 +181,50 @@ TEST_CASE("the reset vector must be odd and inside the image") {
       CHECK_FALSE(valid(words));
    }
 }
+
+namespace {
+
+// JAL x0 with the offset imm (even, 0 to 1 MiB - 2)
+constexpr uint32_t jal(uint32_t imm) {
+   return ((imm >> 20) & 0x1u) << 31 | ((imm >> 1) & 0x3FFu) << 21 | ((imm >> 11) & 0x1u) << 20 |
+          ((imm >> 12) & 0xFFu) << 12 | 0x06Fu;
+}
+
+// A stamped CH32V307 image: "j _start" in word 0, the vector table behind it
+std::vector<uint32_t> riscvImage(uint32_t jumpTo, uint32_t length = 256) {
+   std::vector<uint32_t> words = stampedImage(length);
+   words[0] = jal(jumpTo);
+   words[1] = 0x0000'2100; // a vector entry, no Thumb bit
+   restamp(words);
+   return words;
+}
+
+bool validRiscv(const std::vector<uint32_t> &words) {
+   fakes::SoftwareCrc crc;
+   return image::isValid(words.data(), base, areaSize, crc, image::Arch::riscv);
+}
+
+} // namespace
+
+TEST_CASE("riscvJumpOffset() decodes the j of the reset handler") {
+   // "j _start" of a CH32V307 image of the firmware: 0x6480006F, offset 0x648
+   CHECK(image::riscvJumpOffset(0x6480'006Fu) == 0x648);
+   CHECK(image::riscvJumpOffset(jal(0x1234)) == 0x1234);
+   CHECK(image::riscvJumpOffset(jal(0xF'FFFE)) == 0xF'FFFE);
+   CHECK(image::riscvJumpOffset(0x0000'00EFu) == -1); // JAL ra (a call)
+   CHECK(image::riscvJumpOffset(0x0000'0013u) == -1); // NOP
+   CHECK(image::riscvJumpOffset(0xFFDF'F06Fu) == -1); // j backwards
+}
+
+TEST_CASE("A RISC-V image needs a jump into the image behind the header") {
+   CHECK(validRiscv(riscvImage(0x40)));
+   CHECK(validRiscv(riscvImage(0x2C)));
+   CHECK_FALSE(validRiscv(riscvImage(0x28)));  // into the header words
+   CHECK_FALSE(validRiscv(riscvImage(0x100))); // behind the image (256 bytes)
+   auto noJump = riscvImage(0x40);
+   noJump[0] = 0x0000'0013u;
+   restamp(noJump);
+   CHECK_FALSE(validRiscv(noJump));
+   // The Cortex-M3 rules do not apply: word 0 is no stack pointer
+   CHECK_FALSE(valid(riscvImage(0x40)));
+}

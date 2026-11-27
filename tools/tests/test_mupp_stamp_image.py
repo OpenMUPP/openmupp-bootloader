@@ -200,6 +200,101 @@ PROJECT = os.path.join(ROOT, "tools", "tests", "stamp-project")
 CMAKE = shutil.which("cmake")
 
 
+def jal(imm):
+    """RISC-V JAL x0 ("j") with an even offset of 0 to 1 MiB - 2."""
+    return (((imm >> 20) & 0x1) << 31 | ((imm >> 1) & 0x3FF) << 21 | ((imm >> 11) & 0x1) << 20
+            | ((imm >> 12) & 0xFF) << 12 | 0x06F)
+
+
+def make_riscv_image(length=256, jump=0x40):
+    """An unstamped CH32V307 image: the reset jump, then the vector table."""
+    image = bytearray((i * 7 + 3) & 0xFF for i in range(length))
+    struct.pack_into("<II", image, 0, jal(jump), 0x2100)
+    image[0x1C:0x2C] = bytes(16)
+    return bytes(image)
+
+
+class RiscvCheckTest(unittest.TestCase):
+    def test_decodes_the_reset_jump(self):
+        self.assertEqual(tool.riscv_jump_offset(0x6480006F), 0x648)
+        self.assertEqual(tool.riscv_jump_offset(jal(0x1234)), 0x1234)
+        self.assertIsNone(tool.riscv_jump_offset(0x000000EF))  # jal ra
+        self.assertIsNone(tool.riscv_jump_offset(0xFFDFF06F))  # backwards
+
+    def test_stamped_image_is_valid(self):
+        self.assertEqual(tool.check(tool.stamp(make_riscv_image()), 0x2000, arch="riscv"), [])
+
+    def test_jump_rules(self):
+        for jump in (0x28, 0x100):
+            errors = tool.check(tool.stamp(make_riscv_image(jump=jump)), 0x2000, arch="riscv")
+            self.assertEqual(len(errors), 1, jump)
+            self.assertIn("jump", errors[0])
+
+    def test_cortex_rules_refuse_a_riscv_image(self):
+        self.assertTrue(tool.check(tool.stamp(make_riscv_image()), 0x2000))
+
+    def test_check_mode_with_arch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "app.bin")
+            with open(path, "wb") as f:
+                f.write(tool.stamp(make_riscv_image()))
+            self.assertEqual(tool.main([path, "--check", "--base", "0x2000", "--arch", "riscv"]), 0)
+            self.assertEqual(tool.main([path, "--check", "--base", "0x2000"]), 1)
+
+
+RISCV_GCC = shutil.which("riscv-none-elf-gcc")
+RISCV_OBJCOPY = shutil.which("riscv-none-elf-objcopy")
+
+
+@unittest.skipUnless(RISCV_GCC and RISCV_OBJCOPY, "needs riscv-none-elf-gcc and riscv-none-elf-objcopy")
+class RiscvElfTest(unittest.TestCase):
+    """A CH32V307-like image: .init with the reset jump at 0x2000, .isr_vector at 0x2004."""
+
+    SCRIPT = """
+MEMORY { FLASH (rx) : ORIGIN = 0x2000, LENGTH = 16K RAM (xrw) : ORIGIN = 0x20000000, LENGTH = 64K }
+SECTIONS {
+  .init : { KEEP(*(.init)) } >FLASH
+  .isr_vector : { KEEP(*(.isr_vector)) } >FLASH
+  .text : { *(.text*) } >FLASH
+}
+"""
+    SOURCE = """
+__attribute__((section(".init"), naked)) void reset(void) {
+   __asm volatile(".option norvc\\n j start\\n .option rvc");
+}
+void start(void) { for(;;) {} }
+__attribute__((section(".isr_vector"), used)) void (*const vectors[16])(void) = { [1] = start, [11] = start };
+"""
+
+    def link(self, tmp, origin="0x2000"):
+        script = os.path.join(tmp, "app.ld")
+        source = os.path.join(tmp, "app.c")
+        elf = os.path.join(tmp, "app.elf")
+        with open(script, "w") as f:
+            f.write(self.SCRIPT.replace("ORIGIN = 0x2000", f"ORIGIN = {origin}"))
+        with open(source, "w") as f:
+            f.write(self.SOURCE)
+        subprocess.run([RISCV_GCC, "-march=rv32imac_zicsr", "-mabi=ilp32", "-Os", "-nostdlib",
+                        "-T", script, source, "-o", elf], check=True)
+        return elf
+
+    def test_stamps_a_riscv_elf(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            elf = self.link(tmp)
+            out = os.path.join(tmp, "app.bin")
+            # No --objcopy: the tool takes the RISC-V objcopy (in PATH) from the ELF.
+            self.assertEqual(tool.main([elf, "--bin", out]), 0)
+            with open(out, "rb") as f:
+                stamped = f.read()
+            self.assertEqual(struct.unpack_from("<I", stamped, 0x1C)[0], tool.MAGIC)
+            self.assertEqual(tool.check(stamped, 0x2000, arch="riscv"), [])
+
+    def test_refuses_an_image_linked_at_0x08000000(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            elf = self.link(tmp, origin="0x08002000")
+            self.assertEqual(tool.main([elf, "--objcopy", RISCV_OBJCOPY]), 1)
+
+
 @unittest.skipUnless(GCC and OBJCOPY, "arm-none-eabi-gcc and arm-none-eabi-objcopy not found")
 class ElfTest(unittest.TestCase):
     def setUp(self):

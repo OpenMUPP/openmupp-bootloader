@@ -61,6 +61,25 @@ build:
       - build/${BOARD}/*.map
     expire_in: 1 month
 
+# The CH32V307 bootloader of OpenMUPP v1. firmware-builder v1.14.0 has no
+# RISC-V toolchain, so this job uses the image of the GitHub workflow.
+build-openmuppv1:
+  stage: build
+  image: "ghcr.io/armint/firmware-build-image:v1.15.0"
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - command -v riscv-none-elf-gcc || { echo "riscv-none-elf-gcc not found in the image"; exit 1; }
+    - RISCV_PREFIX=$(dirname "$(dirname "$(command -v riscv-none-elf-gcc)")")
+    - cmake --preset openmuppv1 -DGCC_TOOLCHAIN_PREFIX=${RISCV_PREFIX} -DMUPP_WERROR=ON
+    - cmake --build --preset openmuppv1 -j`nproc`
+  artifacts:
+    paths:
+      - build/openmuppv1/*.elf
+      - build/openmuppv1/*.hex
+      - build/openmuppv1/*.bin
+      - build/openmuppv1/*.map
+    expire_in: 1 month
+
 # Host unit tests (doctest), with the host compiler.
 test-host:
   stage: test

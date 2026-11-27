@@ -33,6 +33,13 @@
       "cacheVariables": { "BOARD": "stlinkv2miniclone" }
     },
     {
+      "name": "openmuppv1",
+      "displayName": "OpenMUPP v1 (CH32V307)",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/gcc_riscv.cmake",
+      "cacheVariables": { "BOARD": "openmuppv1" }
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "binaryDir": "${sourceDir}/build/${presetName}",
@@ -44,6 +51,7 @@
     { "name": "otheruse", "configurePreset": "otheruse" },
     { "name": "stlinkv21", "configurePreset": "stlinkv21" },
     { "name": "stlinkv2miniclone", "configurePreset": "stlinkv2miniclone" },
+    { "name": "openmuppv1", "configurePreset": "openmuppv1" },
     { "name": "host-tests", "configurePreset": "host-tests" }
   ],
   "testPresets": [
