@@ -95,7 +95,11 @@ extern "C" void HardFault_Handler() {
 void os_startup_initialize_hardware() {
    SystemCoreClockUpdate();
    hw::CycleCounter::start();
+}
 
+int main() {
+   // Here, not in os_startup_initialize_hardware(): the GpioPin objects get
+   // their values from the static constructors, which run after that hook.
    Rcc::enableGPIOAClock();
    usbLed.write(false);
    stateLed.write(true);
@@ -110,9 +114,7 @@ void os_startup_initialize_hardware() {
          wait(250);
       }
    }
-}
 
-int main() {
    uint8_t uid[hw::Uid::SizeBytes];
    hw::Uid::read(uid);
    const usb::descriptors::SerialString serial{ uid };
