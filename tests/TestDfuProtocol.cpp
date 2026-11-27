@@ -127,7 +127,16 @@ TEST_CASE("Only a block that starts in a page that is not erased reports the era
 
 TEST_CASE("A GETSTATUS in dfuDNBUSY repeats the poll time of the block") {
    Fixture f{ 4096 };
-   f.download(0, pattern(1024));
+   // Block 0 erases
+   REQUIRE(f.protocol.beginDownload(0, 1024));
+   f.protocol.endDownload();
+   CHECK(f.status()[1] == 80);
+   CHECK(f.status()[4] == static_cast<uint8_t>(State::dnBusy));
+   CHECK(f.reply[1] == 80);
+   f.protocol.requestDone();
+   f.protocol.runWork();
+   CHECK(f.status()[4] == static_cast<uint8_t>(State::dnloadIdle));
+   // Block 1 only writes
    REQUIRE(f.protocol.beginDownload(1, 1024));
    f.protocol.endDownload();
    CHECK(f.status()[1] == 20);
