@@ -18,9 +18,10 @@
 namespace ch32::memory {
 
 constexpr uint32_t applicationEnd = layout::flashBase + 256 * 1024;
-// The fast erase and the fast programming work on 256-byte pages.
-constexpr uint32_t pageSize = 256;
+// The erase unit: the 4 KB sector of the standard erase. It takes as long
+// as one 256-byte fast erase (16 ms). The programming uses 256-byte pages.
+constexpr uint32_t pageSize = 4096;
 
-static_assert(layout::applicationStart % pageSize == 0);
+static_assert(layout::applicationStart % pageSize == 0 && applicationEnd % pageSize == 0);
 
 } // namespace ch32::memory

@@ -40,8 +40,9 @@ namespace {
 
 using namespace ch32;
 
-// The DFU work of one block: four fast erases and four fast page writes
-// of 256 bytes, each less than 5 ms. The CRC of 248 KB takes about 2 ms.
+// The DFU work of one block (CH32V307DS0 table 4-20, typical): one 4 KB
+// sector erase of 16 ms for each fourth block, and four page writes of
+// 2 ms. 24 ms, plus a margin. The CRC of 248 KB takes about 2 ms.
 constexpr dfu::Config dfuConfig{ layout::applicationStart, memory::applicationEnd, memory::pageSize, 40, 20 };
 static_assert(dfuConfig.valid());
 

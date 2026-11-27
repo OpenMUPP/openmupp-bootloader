@@ -2,8 +2,9 @@
 
 #pragma once
 
-// The flash driver of the bootloader on the CH32V307: fast erase and fast
-// programming of 256-byte pages (Flash of ch32v00x-system), with a verify.
+// The flash driver of the bootloader on the CH32V307: erase of 4 KB sectors
+// and fast programming of 256-byte pages (Flash of ch32v00x-system), with
+// a verify.
 //
 // The driver checks each request again, also if the DFU protocol checked
 // it: it erases and writes only in the application area. Other requests

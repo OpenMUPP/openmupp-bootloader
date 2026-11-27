@@ -96,6 +96,7 @@ dfu-util -d 1209:0001 -D openmupp-app-8k.bin
 - USBHS runs at full speed. The bootloader polls EP0. It has no other
   endpoint and no interrupt.
 - Windows binds WinUSB through MS OS 2.0 descriptors.
+- The bootloader erases 4 KB sectors. Each sector erase takes about 16 ms.
 
 The key of OpenMUPP v1 is on BOOT0. A key that is down at a reset starts
 the ROM ISP bootloader of WCH (`4348:55e0`, `wchisp`), not this bootloader.

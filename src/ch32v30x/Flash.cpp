@@ -22,7 +22,7 @@ bool Flash::erasePage(uint32_t address) {
       return false;
    }
    const ::Flash::writable_section unlocked;
-   ::Flash::erase_page(reinterpret_cast<void *>(address));
+   ::Flash::erase_sector(reinterpret_cast<void *>(address));
    const auto *word = reinterpret_cast<const volatile uint32_t *>(address);
    for(uint32_t i = 0; i < memory::pageSize / 4; ++i) {
       // An erased word of the CH32V307 reads 0xE339E339 through the bus
