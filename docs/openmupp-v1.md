@@ -5,8 +5,7 @@ The [README](../README.md#build-the-bootloader) tells how to build it.
 
 ## Write the application
 
-The bootloader is a USB DFU 1.1 device. It is not an AN3155 device. Use
-`dfu-util`:
+The bootloader is a USB DFU 1.1 device. Use `dfu-util`:
 
 ```sh
 dfu-util -d 1209:0001 -D openmupp-app-8k.bin

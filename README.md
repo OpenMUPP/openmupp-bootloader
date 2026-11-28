@@ -6,12 +6,17 @@ firmware over USB, without a debug probe. The main target is the
 OpenMUPP v1 probe with a CH32V307 microcontroller. The bootloader also
 builds for the older probe boards with an STM32F103 microcontroller.
 
-The bootloader uses a different USB protocol on each MCU family:
+On all boards, the bootloader is a USB DFU 1.1 (Device Firmware Upgrade)
+device with the ID `1209:0001` and the product string "OpenMUPP
+Bootloader". The host tool is `dfu-util`.
 
-| MCU family | Boards | USB device | Host tool |
-|---|---|---|---|
-| CH32V307 | OpenMUPP v1 | USB DFU 1.1 (Device Firmware Upgrade), ID `1209:0001`, product "OpenMUPP Bootloader" | `dfu-util` |
-| STM32F103 | Versaloon Mini, ST-Link/V2-1, ST-Link/V2 mini clone | USB CDC (Communication Device Class) serial port, ID `0483:5740`, STM32 serial bootloader protocol (ST AN3155) | `stm32flash` |
+| MCU family | Boards |
+|---|---|
+| CH32V307 | OpenMUPP v1 |
+| STM32F103 | Versaloon Mini, ST-Link/V2-1, ST-Link/V2 mini clone |
+
+Before this version, the STM32F1 boards had an AN3155 bootloader (the
+STM32 serial bootloader protocol on a USB serial port, `stm32flash`).
 
 On all boards, the bootloader uses the first 8 KB of the flash, and the
 application starts at `0x08002000`. The bootloader starts only an
@@ -92,8 +97,7 @@ The build writes these files into the build directory:
 
 The build fails when the image is larger than the bootloader area
 (8 KB). In that case the build removes the image files. The OpenMUPP v1
-image is about 5.3 KB, and the STM32F1 image is about 7 KB. When the
-STM32F1 image grows above 7.5 KB, change to the 12 KB area.
+image is about 5.3 KB, and the STM32F1 image is about 5.2 KB.
 
 These CMake options change the build:
 
@@ -136,30 +140,23 @@ ctest --preset host-tests
 The application is the `app-8k` image of the OpenMUPP firmware build, `openmupp-app-8k.bin`.
 First start the bootloader.
 
-On OpenMUPP v1, write the application with `dfu-util`:
+Write the application with `dfu-util`:
 
 ```sh
 dfu-util -d 1209:0001 -D openmupp-app-8k.bin
 ```
 
-See [docs/openmupp-v1.md](docs/openmupp-v1.md#start-the-bootloader) for the start of the bootloader and the details.
-
-On an STM32F1 board, write a stamped application with `stm32flash`, then
-start it:
-
-```sh
-stm32flash -w app.bin -v -S 0x08002000 /dev/ttyACM0
-stm32flash -g 0x08002000 /dev/ttyACM0
-```
-
-See [docs/stm32f1.md](docs/stm32f1.md#write-the-application) for the start of the bootloader and the details.
+After a valid download, the bootloader starts the application.
+For the start of the bootloader and the details, see
+[docs/openmupp-v1.md](docs/openmupp-v1.md#start-the-bootloader) (OpenMUPP v1) and
+[docs/stm32f1.md](docs/stm32f1.md#write-the-application) (STM32F1 boards).
 
 ## Documentation
 
 | Document | Content |
 |---|---|
 | [docs/openmupp-v1.md](docs/openmupp-v1.md) | The DFU bootloader of OpenMUPP v1: the DFU device, the udev rule, the start of the bootloader, the memory layout and the link address of the application |
-| [docs/stm32f1.md](docs/stm32f1.md) | The AN3155 bootloader of the STM32F1 boards: board notes, memory layout, write steps, start-up, commands, flash protection and the update of the bootloader |
+| [docs/stm32f1.md](docs/stm32f1.md) | The DFU bootloader of the STM32F1 boards: board notes, memory layout, write steps, start-up, flash protection and the update of the bootloader |
 | [docs/image-header.md](docs/image-header.md) | The application image header, the CRC, the stamp tool and its CMake function |
 | [docs/boot-request.md](docs/boot-request.md) | The boot request that an application sends to start the bootloader, and the backup registers of the bootloader |
 | [docs/parent-project.md](docs/parent-project.md) | How a parent project, for example OpenMUPP, builds this repository |
