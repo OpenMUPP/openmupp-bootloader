@@ -29,7 +29,7 @@ starts the bootloader with a boot request (see
 | ST-Link/V2-1 of a Nucleo-64 board | `stlinkv21` | 8 MHz | PA15 | PA9: high is red, low is green | PA10 (SWO) |
 | ST-Link/V2 mini clone (USB stick) | `stlinkv2miniclone` | 8 MHz | Fixed | PA9: high is blue, low is red | PB7 (SWIM) |
 
-The pins are the same as in OpenMUPP (`src/board/boards/`).
+The pins are the same as in OpenMUPP ([`src/board/boards/`](https://github.com/OpenMUPP/OpenMUPP/tree/dev/src/board/boards)).
 
 ## Get the source code
 
@@ -50,7 +50,7 @@ The submodules are:
 ## Requirements
 
 - CMake 3.21 or later.
-- The xPack RISC-V GCC (`riscv-none-elf`), for example as in the build image of CI.
+- The xPack RISC-V GCC (`riscv-none-elf`), for example 15.2.0-1 as in CI.
 - For the Versaloon Mini and the ST-Link boards only: the Arm GNU Toolchain (`arm-none-eabi`), for example 15.3.rel2 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
@@ -67,8 +67,10 @@ cmake --build --preset openmuppv1 -j
 ```
 
 The build directory is `build/<preset>`, here `build/openmuppv1`.
-If the compiler of the toolchain is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
-The RISC-V toolchain file also reads the environment variable `RISCV_GCC_TOOLCHAIN_PREFIX` when `GCC_TOOLCHAIN_PREFIX` is not set.
+If the compiler of the toolchain is in the `PATH`, you can omit `GCC_TOOLCHAIN_PREFIX`.
+When the option is not set, the toolchain files also read an environment variable.
+The RISC-V toolchain file reads `RISCV_GCC_TOOLCHAIN_PREFIX`.
+The Arm toolchain file reads `GCC_TOOLCHAIN_PREFIX` or `ARM_GNU_TOOLCHAIN`.
 
 Each board has a preset with the name of the board.
 The STM32F1 boards (`mini`, `stlinkv21`, `stlinkv2miniclone`) need the Arm GNU Toolchain:
@@ -100,7 +102,8 @@ These CMake options change the build:
 | `BOARD` | *(empty)* | Board to build for (`openmuppv1`, `mini`, `stlinkv21`, `stlinkv2miniclone`). Overrides `OPENMUPP_BOOTLOADER_BOARDS`. A preset selects one board. |
 | `OPENMUPP_BOOTLOADER_BOARDS` | `mini;otheruse` | STM32F1 boards to build when `BOARD` is not set. Use a semicolon list for more than one board. All boards of one build must have the same crystal: build `stlinkv21` and `stlinkv2miniclone` alone or together. |
 | `OPENMUPP_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit of the STM32F1 protects 4 KB. |
-| `MUPP_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
+| `MUPP_CH32V00X_SYSTEM_DIR` | `dependencies/ch32v00x-system` | Source directory of `ch32v00x-system` (OpenMUPP v1) |
+| `MUPP_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` (STM32F1 boards) |
 | `MUPP_LTO` | `ON` | Link-time optimisation (LTO) |
 | `MUPP_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
 | `MUPP_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images |
@@ -117,6 +120,8 @@ cmake -S . -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake \
 cmake --build build/mini
 ```
 
+For `BOARD=openmuppv1`, use `cmake/gcc_riscv.cmake` and the RISC-V toolchain.
+
 The host unit tests use doctest and the host C++ compiler. The build
 downloads doctest from GitHub. The tests are in `tests/`.
 
@@ -128,11 +133,16 @@ ctest --preset host-tests
 
 ## Write the firmware
 
+The application is the `app-8k` image of the OpenMUPP firmware build, `openmupp-app-8k.bin`.
+First start the bootloader.
+
 On OpenMUPP v1, write the application with `dfu-util`:
 
 ```sh
 dfu-util -d 1209:0001 -D openmupp-app-8k.bin
 ```
+
+See [docs/openmupp-v1.md](docs/openmupp-v1.md#start-the-bootloader) for the start of the bootloader and the details.
 
 On an STM32F1 board, write a stamped application with `stm32flash`, then
 start it:
@@ -141,6 +151,8 @@ start it:
 stm32flash -w app.bin -v -S 0x08002000 /dev/ttyACM0
 stm32flash -g 0x08002000 /dev/ttyACM0
 ```
+
+See [docs/stm32f1.md](docs/stm32f1.md#write-the-application) for the start of the bootloader and the details.
 
 ## Documentation
 

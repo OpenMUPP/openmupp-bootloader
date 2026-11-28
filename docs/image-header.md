@@ -63,7 +63,8 @@ tools/mupp-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 57344
 ```
 
 In this example, the application starts at `0x08002000`. The application
-area of an STM32F103x8 (64 KB flash) is 57344 bytes (56 KB).
+area of an STM32F103x8 (64 KB flash) is 57344 bytes (56 KB). On OpenMUPP
+v1, the application area is 253952 bytes (248 KB).
 
 - The tool writes the header into the `.isr_vector` section of the ELF
   file. Thus an image that a debug probe writes also has the header.
@@ -115,5 +116,6 @@ The tool tests use the Python `unittest` module:
 python3 -m unittest discover -s tools/tests
 ```
 
-The tests that build an ELF image need `arm-none-eabi-gcc` and `cmake`.
-Without them, the test run skips these tests.
+The tests that build an ELF image need `cmake`, and the GCC and the
+objcopy of the Arm or the RISC-V toolchain. Without a toolchain, the test
+run skips its tests.

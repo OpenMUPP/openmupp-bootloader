@@ -25,7 +25,7 @@ dfu-util -d 1209:0001 -D openmupp-app-8k.bin
   endpoint and no interrupt.
 - Windows binds WinUSB through MS OS 2.0 descriptors.
 - The bootloader erases 4 KB sectors. Each sector erase takes about
-  16 ms.
+  9 ms (8.64 ms, measured on OpenMUPP v1).
 
 On Linux, the user needs access to the device, for example with this
 udev rule:

@@ -51,7 +51,9 @@ Before you use the bootloader on the board, check these items:
   Measure each pad to its MCU pin before you connect the probe.
 
 The ST-Link/V2 mini clone is the USB stick clone with a 2x5 header. Its
-pin map is measured (OpenMUPP `docs/stlinkv2-mini-clone.md`).
+pin map is measured (see
+[ST-Link/V2 mini clone](https://github.com/OpenMUPP/OpenMUPP/blob/dev/docs/stlinkv2-mini-clone.md)
+in OpenMUPP).
 It has a key: the SWIM pin of the header. The board connects SWIM to PB7
 and PB11 and has a pull-up on it. A wire from SWIM to GND at power-up
 starts the bootloader, also when the application is valid. Thus a broken
@@ -79,6 +81,8 @@ application at `0x08002800`. The two layouts are not compatible. A board
 with the legacy bootloader keeps the legacy layout until you write this
 bootloader with a debug probe, see
 [Update the bootloader](#update-the-bootloader).
+The legacy bootloader ignores the header, so a stamped image also runs
+behind it.
 
 ## Write the application
 
