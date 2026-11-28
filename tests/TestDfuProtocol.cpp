@@ -87,6 +87,8 @@ TEST_CASE("A download writes the blocks in order and the manifestation starts th
    f.protocol.requestDone();
    CHECK(f.protocol.resetRequested());
    CHECK(f.flash.checks == 1);
+   // Only block 0 has the header check
+   CHECK(f.flash.headerChecks == std::vector<std::vector<uint8_t>>{ first });
    CHECK(f.flash.violations == 0);
    CHECK(f.flash.erasedPages == std::vector<uint32_t>{ start, start + 1024, start + 2048 });
    for(std::size_t i = 0; i < 1024; ++i) {
@@ -229,6 +231,42 @@ TEST_CASE("An image that is not valid gives errVERIFY and no reset") {
    f.protocol.requestDone();
    f.protocol.usbReset();
    CHECK_FALSE(f.protocol.resetRequested());
+}
+
+TEST_CASE("A block 0 without a valid header gives errTARGET and erases nothing") {
+   Fixture f;
+   f.flash.validHeader = false;
+   const auto block = pattern(1024);
+   REQUIRE(f.protocol.beginDownload(0, 1024));
+   std::copy(block.begin(), block.end(), f.protocol.buffer().begin());
+   f.protocol.endDownload();
+   f.status();
+   f.protocol.requestDone();
+   f.protocol.runWork();
+   CHECK(f.protocol.state() == State::error);
+   CHECK(f.status()[0] == static_cast<uint8_t>(Status::errTarget));
+   CHECK(f.flash.headerChecks == std::vector<std::vector<uint8_t>>{ block });
+   // The old image stays
+   CHECK(f.flash.erasedPages.empty());
+   CHECK(f.flash.writes == 0);
+   CHECK(f.flash.at(start) == 0x00);
+   // The download cannot continue
+   CHECK_FALSE(f.protocol.beginDownload(1, 1024));
+   f.protocol.requestDone();
+   CHECK_FALSE(f.protocol.resetRequested());
+
+   // After CLRSTATUS, a new download with a valid header works
+   CHECK(f.protocol.clearStatus());
+   f.flash.validHeader = true;
+   f.download(0, pattern(64));
+   f.manifest(1);
+   CHECK(f.protocol.state() == State::idle);
+}
+
+TEST_CASE("A short block 0 goes to the header check with its size") {
+   Fixture f;
+   f.download(0, pattern(64));
+   CHECK(f.flash.headerChecks == std::vector<std::vector<uint8_t>>{ pattern(64) });
 }
 
 TEST_CASE("An upload reads the application area and ends with a short block") {

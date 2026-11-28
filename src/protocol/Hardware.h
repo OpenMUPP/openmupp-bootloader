@@ -73,6 +73,10 @@ class Application {
    public:
    // True when the image header and the CRC are correct (#9).
    virtual bool isValid() const = 0;
+   // True when the first bytes of a new image have a valid header
+   // (image::headerIsValid()), without the CRC: the check before the
+   // erase of the old image (#7).
+   virtual bool headerIsValid(std::span<const uint8_t> bytes) const = 0;
 
    protected:
    ~Application() = default;
