@@ -10,9 +10,8 @@
 // it erases and writes only in the application area, and only in groups
 // that FLASH_WRPR does not protect. Other requests return false.
 //
-// An erase of one page stalls the CPU for 20-40 ms. The protocol erases
-// one page for each poll() call, so the USB device gets a poll between
-// two pages (usb/UsbCdc.h).
+// An erase of one page stalls the CPU for 20-40 ms. The DFU protocol
+// erases one page for each block, between two polls of the USB device.
 
 #include <cstdint>
 #include <span>

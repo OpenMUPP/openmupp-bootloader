@@ -2,9 +2,12 @@
 
 #pragma once
 
-// The memory regions that the AN3155 commands can access (issue #8).
+// The memory regions of the STM32F103x8/xB (issue #8). The bootloader
+// uses the flash size and the page size. The region checks below come from
+// the AN3155 bootloader of the earlier version; only the host tests use
+// them now.
 //
-// READ_MEMORY reads only from the readable regions: the flash, the RAM,
+// AN3155: READ_MEMORY reads only from the readable regions: the flash, the RAM,
 // the system memory, the option bytes, the flash size register and the
 // unique ID (UID). Other addresses get a NACK, so a read never causes a
 // bus fault.

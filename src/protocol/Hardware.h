@@ -2,7 +2,7 @@
 
 #pragma once
 
-// Interfaces between the AN3155 protocol and the hardware (issue #8). The
+// Interfaces between the bootloader protocol and the hardware (issue #8). The
 // protocol code has no hardware access: #10 implements these interfaces on
 // the STM32F1, and the host tests use the fakes in tests/fakes.
 //

@@ -14,7 +14,6 @@ FetchContent_MakeAvailable(doctest)
 
 add_executable(mupp-bootloader-tests
         main.cpp
-        TestAn3155Protocol.cpp
         TestBootDecision.cpp
         TestDfuDevice.cpp
         TestDfuProtocol.cpp
@@ -23,8 +22,6 @@ add_executable(mupp-bootloader-tests
         TestLayout.cpp
         TestMemoryMap.cpp
         TestOptionByteValues.cpp
-        TestStm32flashSequences.cpp
-        "${PROJECT_SOURCE_DIR}/src/protocol/An3155Protocol.cpp"
         "${PROJECT_SOURCE_DIR}/src/protocol/DfuProtocol.cpp")
 set_target_properties(mupp-bootloader-tests PROPERTIES
         CXX_STANDARD 23
