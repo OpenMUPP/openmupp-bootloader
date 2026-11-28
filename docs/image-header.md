@@ -47,7 +47,10 @@ An application is valid when all of these rules are true:
 - Cortex-M3: the initial stack pointer (word `0x00`) is in RAM, and the
   reset vector (word `0x04`) is odd and inside the image.
 - RISC-V (CH32V307): word `0x00` is a `j` (JAL x0) to an address inside
-  the image, behind the header.
+  the image, behind the header. The handler address at `0x08` (the NMI
+  entry) is inside the image. The image starts at `0x00002000`, the
+  application start in the flash alias. The `j` is PC-relative, so only
+  this handler address shows an image with a different link address.
 
 ## Stamp tool
 
@@ -72,6 +75,9 @@ v1, the application area is 253952 bytes (248 KB).
   Intel HEX file.
 - `--max-length <bytes>` is the size of the application area. The tool
   fails when the image is larger.
+- The tool refuses a RISC-V image that does not start at `0x00002000`,
+  the application start in the flash alias. For example, it refuses a
+  `standalone` image (linked at 0) and an image linked at `0x08002000`.
 - The tool refuses an image where the words `0x1C` to `0x2B` are not
   zero. An image that has a header already gets a new header.
 - When the image length is not a multiple of 4, the tool adds `0xFF`
@@ -89,6 +95,9 @@ the application start address:
 ```sh
 tools/mupp-stamp-image.py --check app.bin --base 0x08002000
 ```
+
+For a CH32V307 image, set `--base 0x2000` (the address in the flash
+alias) and `--arch riscv`.
 
 ## CMake
 

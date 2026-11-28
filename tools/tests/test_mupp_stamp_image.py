@@ -206,10 +206,10 @@ def jal(imm):
             | ((imm >> 12) & 0xFF) << 12 | 0x06F)
 
 
-def make_riscv_image(length=256, jump=0x40):
+def make_riscv_image(length=256, jump=0x40, handler=0x20A0):
     """An unstamped CH32V307 image: the reset jump, then the vector table."""
     image = bytearray((i * 7 + 3) & 0xFF for i in range(length))
-    struct.pack_into("<II", image, 0, jal(jump), 0x2100)
+    struct.pack_into("<III", image, 0, jal(jump), 0, handler)
     image[0x1C:0x2C] = bytes(16)
     return bytes(image)
 
@@ -229,6 +229,15 @@ class RiscvCheckTest(unittest.TestCase):
             errors = tool.check(tool.stamp(make_riscv_image(jump=jump)), 0x2000, arch="riscv")
             self.assertEqual(len(errors), 1, jump)
             self.assertIn("jump", errors[0])
+
+    def test_handler_rules(self):
+        for handler in (0x2000, 0x20FC):
+            self.assertEqual(tool.check(tool.stamp(make_riscv_image(handler=handler)), 0x2000, arch="riscv"), [])
+        # 0x1A0: issue #6, a standalone image linked at 0, with a correct jump and CRC
+        for handler in (0x1A0, 0x1FFC, 0x2100, 0x080020A0):
+            errors = tool.check(tool.stamp(make_riscv_image(handler=handler)), 0x2000, arch="riscv")
+            self.assertEqual(len(errors), 1, hex(handler))
+            self.assertIn("handler", errors[0])
 
     def test_cortex_rules_refuse_a_riscv_image(self):
         self.assertTrue(tool.check(tool.stamp(make_riscv_image()), 0x2000))
@@ -289,10 +298,16 @@ __attribute__((section(".isr_vector"), used)) void (*const vectors[16])(void) = 
             self.assertEqual(struct.unpack_from("<I", stamped, 0x1C)[0], tool.MAGIC)
             self.assertEqual(tool.check(stamped, 0x2000, arch="riscv"), [])
 
-    def test_refuses_an_image_linked_at_0x08000000(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            elf = self.link(tmp, origin="0x08002000")
-            self.assertEqual(tool.main([elf, "--objcopy", RISCV_OBJCOPY]), 1)
+    def test_refuses_an_image_not_linked_at_the_application_start(self):
+        for origin in ("0x08002000", "0x0"):
+            with tempfile.TemporaryDirectory() as tmp:
+                elf = self.link(tmp, origin=origin)
+                with open(elf, "rb") as f:
+                    before = f.read()
+                with self.assertRaisesRegex(tool.StampError, "application start"):
+                    tool.stamp_elf(elf, RISCV_OBJCOPY)
+                with open(elf, "rb") as f:
+                    self.assertEqual(f.read(), before, origin)
 
 
 @unittest.skipUnless(GCC and OBJCOPY, "arm-none-eabi-gcc and arm-none-eabi-objcopy not found")

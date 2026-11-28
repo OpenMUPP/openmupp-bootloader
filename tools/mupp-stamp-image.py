@@ -10,7 +10,9 @@ follows at offset 4. There, 0x1C and 0x28 are reserved exceptions, but
 The firmware runs in machine mode (no ecall from user mode), and it must
 not depend on a BreakPoint handler: an ebreak without a debugger jumps to
 the CRC value. Link a RISC-V image at the flash alias (0x00002000), because
-the bootloader jumps there.
+the bootloader jumps there. The reset jump is PC-relative, so the check uses
+the first handler address of the vector table (offset 0x08) to find an image
+with a different link address.
 
     0x1C  magic 0x314C5356 ("VSL1")
     0x20  image length in bytes, a multiple of 4, from the application start
@@ -57,7 +59,12 @@ MAX_FLASH = {"cortex-m3": 128 * 1024, "riscv": 256 * 1024}
 ARCHES = ("cortex-m3", "riscv")
 OBJCOPY = {"cortex-m3": "arm-none-eabi-objcopy", "riscv": "riscv-none-elf-objcopy"}
 # The CH32V307 maps the flash at 0x08000000 and at the alias 0x00000000.
-RISCV_FLASH_BASE = 0x08000000
+# The application starts behind the 8 KB bootloader area, in the alias.
+# This is the default OPENMUPP_BOOTLOADER_AREA_SIZE; add an option if a
+# RISC-V board uses another area size.
+RISCV_APP_START = 0x00002000
+# The first absolute handler address (NMI) of a RISC-V image
+RISCV_HANDLER_OFFSET = 0x08
 # e_machine of the ELF header
 EM_ARM = 0x28
 EM_RISCV = 0xF3
@@ -176,6 +183,10 @@ def check(image, base, max_length=None, arch="cortex-m3"):
         target = riscv_jump_offset(_word(image, 0))
         if target is None or not HEADER_END <= target < length:
             errors.append(f"word 0 (0x{_word(image, 0):08X}) is not a jump into the image behind the header")
+        handler = _word(image, RISCV_HANDLER_OFFSET)
+        if not base <= handler < base + length:
+            errors.append(f"the handler address 0x{handler:08X} at 0x{RISCV_HANDLER_OFFSET:02X} is not inside "
+                          f"the image: the link address is not 0x{base:08X}")
         return errors
     sp = _word(image, 0)
     if not RAM_START <= sp <= RAM_START + RAM_SIZE:
@@ -254,11 +265,11 @@ def stamp_elf(elf, objcopy=None, bin_out=None, hex_out=None, max_length=None):
         raise StampError(f"the ELF file has no {VECTOR_SECTION} section")
     vectors_address, size = sections[VECTOR_SECTION]
     address = min(lma for lma, _ in sections.values())
-    # The bootloader jumps to the alias. The startup code loads gp and sp
-    # PC-relative, so an image linked at 0x08000000 gets wrong pointers.
-    if arch == "riscv" and address >= RISCV_FLASH_BASE:
-        raise StampError(f"the RISC-V image is linked at 0x{address:08X}: link it at the flash alias "
-                         f"(below 0x{RISCV_FLASH_BASE:08X})")
+    # The bootloader jumps to the application start in the alias. An image
+    # linked at another address starts, but its absolute addresses are wrong.
+    if arch == "riscv" and address != RISCV_APP_START:
+        raise StampError(f"the RISC-V image is linked at 0x{address:08X}: link it at the application "
+                         f"start 0x{RISCV_APP_START:08X} (flash alias)")
     # The Cortex-M3 image starts with the vector table. The RISC-V image
     # starts with the reset jump, and the vector table follows.
     offset = vectors_address - address

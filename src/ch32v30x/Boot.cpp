@@ -42,13 +42,12 @@ class CrcUnit {
    Rcc::disableCRCClock();
    hw::Bkp::disable();
    // cpuInit() of the start-up set mtvec, mstatus and INTSYSCR. The
-   // application sets them again; interrupts stay off until then. The
-   // application is linked at its address in the flash alias at 0.
+   // application sets them again; interrupts stay off until then.
    asm volatile("csrw mstatus, zero\n"
                 "fence.i\n"
                 "jr %0\n"
                 :
-                : "r"(layout::applicationStart - layout::flashBase));
+                : "r"(memory::applicationAlias));
    __builtin_unreachable();
 }
 
@@ -56,7 +55,7 @@ class CrcUnit {
 
 bool ApplicationImage::isValid() const {
    CrcUnit crc;
-   return image::isValid(reinterpret_cast<const uint32_t *>(layout::applicationStart), layout::applicationStart,
+   return image::isValid(reinterpret_cast<const uint32_t *>(layout::applicationStart), memory::applicationAlias,
                          memory::applicationEnd - layout::applicationStart, crc, image::Arch::riscv);
 }
 
