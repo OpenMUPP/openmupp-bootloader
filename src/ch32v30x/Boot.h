@@ -30,6 +30,7 @@ namespace ch32 {
 class ApplicationImage : public protocol::Application {
    public:
    bool isValid() const override;
+   bool headerIsValid(std::span<const uint8_t> bytes) const override;
 };
 
 } // namespace ch32

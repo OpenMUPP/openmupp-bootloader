@@ -5,7 +5,7 @@
 // A fake flash for the DFU tests, with a page size of the test: 1 KB as on
 // the STM32F1, 256 bytes as the fast page of the CH32V307. An erased byte
 // is 0xFF, and a write to a byte that is not erased fails. The fake is also
-// the image check of the manifestation.
+// the image check of the manifestation and the header check of block 0.
 
 #include <cstdint>
 #include <span>
@@ -72,13 +72,21 @@ class FakeFlash : public protocol::FlashTarget, public protocol::MemoryReader, p
       return valid;
    }
 
+   bool headerIsValid(std::span<const uint8_t> bytes) const override {
+      headerChecks.emplace_back(bytes.begin(), bytes.end());
+      return validHeader;
+   }
+
    std::vector<uint32_t> erasedPages;
    int writes = 0;
    int violations = 0;
    mutable int checks = 0;
+   // The bytes of each header check
+   mutable std::vector<std::vector<uint8_t>> headerChecks;
    bool failErase = false;
    bool failWrite = false;
    bool valid = true;
+   bool validHeader = true;
 
    private:
    uint32_t start_;

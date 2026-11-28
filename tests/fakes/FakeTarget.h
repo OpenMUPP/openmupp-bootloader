@@ -105,6 +105,10 @@ class FakeTarget : public protocol::FlashTarget,
       return applicationValid;
    }
 
+   bool headerIsValid(std::span<const uint8_t>) const override {
+      return applicationValid;
+   }
+
    uint32_t milliseconds() const override {
       return now;
    }

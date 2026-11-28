@@ -85,6 +85,11 @@ bool ApplicationImage::isValid() const {
                          map.flashEnd() - layout::applicationStart, crc);
 }
 
+bool ApplicationImage::headerIsValid(std::span<const uint8_t> bytes) const {
+   const protocol::MemoryMap map{ flashSize() };
+   return image::headerIsValid(bytes, layout::applicationStart, map.flashEnd() - layout::applicationStart);
+}
+
 } // namespace hw::startup
 
 using namespace hw::startup;

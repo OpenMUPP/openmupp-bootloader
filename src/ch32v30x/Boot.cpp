@@ -59,6 +59,11 @@ bool ApplicationImage::isValid() const {
                          memory::applicationEnd - layout::applicationStart, crc, image::Arch::riscv);
 }
 
+bool ApplicationImage::headerIsValid(std::span<const uint8_t> bytes) const {
+   return image::headerIsValid(bytes, memory::applicationAlias, memory::applicationEnd - layout::applicationStart,
+                               image::Arch::riscv);
+}
+
 } // namespace ch32
 
 using namespace ch32;
