@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Entry point of the bootloader (issue #4).
+// The DFU bootloader on the STM32F1 boards.
 //
 // hw/Boot.cpp decides after the reset: start the application, or continue
 // here in bootloader mode. In bootloader mode, main():
@@ -7,11 +7,14 @@
 // 1. Write-protects the bootloader area, if a WRP bit of it is clear
 //    (plan section 3.6). This needs a reset.
 // 2. Sets the clock to 72 MHz from the crystal (HSE_VALUE), and starts the
-//    USB CDC device (usb/UsbCdc.h).
-// 3. Runs the AN3155 protocol (protocol/An3155Protocol.h) on the CDC port.
-//    The main loop polls the USB device; there is no USB interrupt.
+//    USB device (hw/UsbFs.h) with the DFU interface (usb/DfuDevice.h). The
+//    main loop polls it; there is no USB interrupt.
+// 3. Runs the flash work of the DFU protocol between two polls.
+// 4. After a valid download, resets into the application with the GO
+//    token.
 //
-// The LED is on in bootloader mode, and flickers on USB activity.
+// The LED is on in bootloader mode, and flickers during a download or an
+// upload.
 
 #include <cmsis_device.h>
 #include <peripherals/Rcc.h>
@@ -19,13 +22,17 @@
 #include <startup-hooks.h>
 #include <utils/Timekeeping.h>
 
+#include "Layout.h"
 #include "boot/BootDecision.h"
 #include "boot/FlashRules.h"
 #include "hw/Board.h"
 #include "hw/Boot.h"
 #include "hw/Flash.h"
-#include "protocol/An3155Protocol.h"
-#include "usb/UsbCdc.h"
+#include "hw/UsbFs.h"
+#include "protocol/DfuProtocol.h"
+#include "protocol/MemoryMap.h"
+#include "usb/DfuDescriptors.h"
+#include "usb/DfuDevice.h"
 
 namespace {
 
@@ -39,22 +46,25 @@ constexpr uint16_t selfProtectToken = 0x5E1F;
 constexpr uint32_t flickerMs = 50;
 constexpr uint32_t idleMs = 100;
 
-// Wait for the last reply before a reset, and the time that the host sees
-// the disconnect.
-constexpr uint32_t drainMs = 100;
+// The DFU work of one block (STM32F103x8/xB datasheet, table 28): a 1 KB
+// page erase takes 20 to 40 ms, and the 512 half-word writes of a block
+// take 27 ms (52.5 us typical each). Each block starts a new page, so each
+// block has the erase poll time. A shorter poll time is not an error: the
+// peripheral NAKs the data stage of the next GETSTATUS until the work is
+// done. The CRC of 120 KB takes about 3 ms.
+constexpr uint32_t blockPollMs = 30;
+constexpr uint32_t erasePollMs = 60;
+constexpr uint32_t manifestPollMs = 10;
+
+// The time that dfu-util needs to read the last GETSTATUS reply, and the
+// time that the host sees the disconnect.
+constexpr uint32_t drainMs = 20;
 constexpr uint32_t disconnectMs = 20;
 
 // SysTick runs at 1 kHz: the ticks of system-stm32 are milliseconds.
 uint32_t milliseconds() {
    return static_cast<uint32_t>(getUptimeTicks());
 }
-
-class SysTickClock : public protocol::Clock {
-   public:
-   uint32_t milliseconds() const override {
-      return ::milliseconds();
-   }
-};
 
 class Memory : public protocol::MemoryReader {
    public:
@@ -93,18 +103,8 @@ void wait(uint32_t ms) {
 
 // Resets the MCU. dr1 and dr2 go to the backup registers first: the boot
 // request, or the GO token.
-[[noreturn]] void restart(uint16_t dr1, uint16_t dr2) {
-   const uint32_t start = milliseconds();
-   while(!usbcdc::sent() && milliseconds() - start < drainMs) {
-      reloadWatchdog();
-      usbcdc::poll();
-   }
-   // Reset the USB peripheral and stop its clock: while it is enabled, the
-   // transceiver drives D+ and not the GPIO (RM0008, GPIO configurations
-   // for device peripherals).
-   RCC->APB1RSTR |= RCC_APB1RSTR_USBRST;
-   RCC->APB1RSTR &= ~RCC_APB1RSTR_USBRST;
-   Rcc::disableUSBClock();
+[[noreturn]] void restart(hw::UsbFs &usb, uint16_t dr1, uint16_t dr2) {
+   usb.stop();
    setPullUp(false);
    wait(disconnectMs);
    hw::startup::writeBackup(BKP->DR1, dr1);
@@ -196,64 +196,42 @@ int main() {
 
    Memory memory;
    hw::startup::ApplicationImage application;
-   SysTickClock clock;
-   protocol::An3155Protocol protocol{ map, { flash, memory, flash, application, clock } };
+   const dfu::Config config{
+      layout::applicationStart, map.flashEnd(), protocol::memory::pageSize, blockPollMs, erasePollMs, manifestPollMs
+   };
+   // Static: keeps the 1 KB block buffer off the 2 KB main stack
+   static dfu::Protocol protocol{ config, flash, memory, application };
 
    uint8_t uid[hw::Uid::SizeBytes];
    hw::Uid::read(uid);
+   const usb::descriptors::SerialString serial{ uid };
+   hw::UsbFs usb;
+   usb::DfuDevice<hw::UsbFs> device{ usb, protocol, serial.bytes };
+
    // The host must see the disconnect also after a reset from the
    // application, when no pull-up switch disconnected it.
    wait(disconnectMs);
    Rcc::enableUSBClock();
-   usbcdc::start(uid, &setPullUp);
+   usb.start();
+   setPullUp(true);
 
    Led led;
-   uint32_t resets = usbcdc::resetCount();
-   bool configured = false;
-   uint8_t received[usbcdc::packetSize];
-   std::size_t receivedSize = 0;
-   std::size_t taken = 0;
-
    for(;;) {
       reloadWatchdog();
-      usbcdc::poll();
+      usb.poll(device);
+      protocol.runWork();
       const uint32_t now = milliseconds();
-
-      // A USB reset or a disconnect: the protocol restarts.
-      if(usbcdc::resetCount() != resets || usbcdc::configured() != configured) {
-         resets = usbcdc::resetCount();
-         configured = usbcdc::configured();
-         protocol.reset();
-         receivedSize = taken = 0;
-      }
-
-      if(taken == receivedSize) {
-         receivedSize = usbcdc::read(received, sizeof received);
-         taken = 0;
-      }
-      if(taken < receivedSize) {
-         taken += protocol.receive({ received + taken, receivedSize - taken });
+      if(protocol.state() != dfu::State::idle && protocol.state() != dfu::State::error) {
          led.activity(now);
       }
-
-      protocol.poll();
-
-      const auto output = protocol.output();
-      if(!output.empty()) {
-         protocol.consumeOutput(usbcdc::write(output.data(), output.size()));
-         led.activity(now);
-      }
-
-      switch(protocol.action()) {
-      case protocol::An3155Protocol::Action::none:
-         break;
-      case protocol::An3155Protocol::Action::reset:
-         // New option bytes: the host connects to the bootloader again.
-         restart(boot::bootRequest, 0);
-      case protocol::An3155Protocol::Action::startApplication:
-         restart(0, boot::goToken);
-      }
-
       led.update(now);
+      if(protocol.resetRequested()) {
+         const uint32_t start = milliseconds();
+         while(milliseconds() - start < drainMs) {
+            reloadWatchdog();
+            usb.poll(device);
+         }
+         restart(usb, 0, boot::goToken);
+      }
    }
 }

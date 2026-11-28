@@ -1,6 +1,6 @@
 # STM32F1 boards
 
-This document describes the AN3155 bootloader of the boards with an STM32F103: the Versaloon Mini, the ST-Link/V2-1 and the ST-Link/V2 mini clone.
+This document describes the DFU bootloader of the boards with an STM32F103: the Versaloon Mini, the ST-Link/V2-1 and the ST-Link/V2 mini clone.
 The [README](../README.md#build-the-bootloader) tells how to build it.
 
 ## Board notes
@@ -59,10 +59,11 @@ and PB11 and has a pull-up on it. A wire from SWIM to GND at power-up
 starts the bootloader, also when the application is valid. Thus a broken
 application does not need a debug probe.
 
-The bootloader passed a test on one mini clone: the boot request, the
-key, the D+ disconnect, and a write and GO with `stm32flash`. The MCU of
-that board has ST markings, but it is an STM32F103 compatible MCU, not a
-genuine STM32F103.
+The AN3155 bootloader of the earlier version passed a test on one mini
+clone: the boot request, the key, the D+ disconnect, and a write and GO
+with `stm32flash`. The MCU of that board has ST markings, but it is an
+STM32F103 compatible MCU, not a genuine STM32F103. The DFU bootloader
+has no hardware test yet.
 
 ## Memory layout
 
@@ -73,8 +74,9 @@ genuine STM32F103.
 
 The flash size is different on each part. For example, the STM32F103C8
 has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
-size from the flash size register (`0x1FFFF7E0`) at run time. It sends a
-NACK (negative acknowledge) for a write or an erase outside the flash.
+size from the flash size register (`0x1FFFF7E0`) at run time. The
+application area ends at the end of the flash, at most at 128 KB. A
+download that is larger than the application area gets `errADDRESS`.
 
 The legacy bootloader (tag `v1-legacy`) used a 10 KB area, with the
 application at `0x08002800`. The two layouts are not compatible. A board
@@ -93,24 +95,37 @@ behind it.
    (pin 3), then connect the board to USB.
    On the ST-Link/V2 mini clone, connect SWIM (header pin 3) to GND
    (header pin 5), then connect the board to USB.
-2. The bootloader starts and the LED comes on. The LED
-   flickers when there is USB traffic.
+2. The bootloader starts and the LED comes on. The LED flickers during
+   a download or an upload.
 3. Write a stamped application image (see
-   [Application image header](image-header.md)) with
-   `stm32flash`:
+   [Application image header](image-header.md)) with `dfu-util`:
 
    ```sh
-   stm32flash -w app.bin -v -S 0x08002000 /dev/ttyACM0
+   dfu-util -d 1209:0001 -D app.bin
    ```
 
-4. Start the application:
+The DFU device is the same as on OpenMUPP v1 (see
+[OpenMUPP v1](openmupp-v1.md#write-the-application)):
 
-   ```sh
-   stm32flash -g 0x08002000 /dev/ttyACM0
-   ```
+- USB ID: `1209:0001`, product "OpenMUPP Bootloader". The serial number
+  is the chip UID.
+- One alternate setting, "Application". Block n is at
+  `0x08002000 + n x 1024`. The host cannot select an address, so it
+  cannot write the bootloader area.
+- Before the first erase, the bootloader checks the image header in
+  block 0 (no CRC). With a header that is not valid, it reports
+  `errTARGET`, erases nothing and stays in DFU mode. For example, it
+  refuses an image for the CH32V307 or an image without a header.
+- After a download, the bootloader checks the image header and the CRC.
+  With a valid image, it starts the application. With an image that is
+  not valid, it reports `errVERIFY` and stays in DFU mode.
+- `dfu-util -U` reads the application area.
+- The bootloader polls EP0. It has no other endpoint and no interrupt.
+- Windows binds WinUSB through MS OS 2.0 descriptors.
+- The bootloader erases one 1 KB page for each block. The erase and the
+  write of a block take 47 ms to 76 ms (datasheet values, not measured).
 
-The bootloader sends a NACK to `GO` when the application is not valid.
-`GO` accepts only the application start address.
+On Linux, use the udev rule of [OpenMUPP v1](openmupp-v1.md#write-the-application).
 
 ## Start-up
 
@@ -131,35 +146,12 @@ bootloader sets `VTOR` and the main stack pointer from the application
 vector table. Then it jumps to the reset vector with all interrupts
 masked (`PRIMASK` set). The application must clear `PRIMASK`.
 
-`GO` does not jump from the bootloader. It writes the GO token to
-`BKP->DR2`, disconnects from USB and resets the MCU. Step 2 then starts
-the application. Thus the host sees a USB disconnect, and the
-application starts in the reset state.
+After a valid download, the bootloader does not jump to the
+application. It writes the GO token to `BKP->DR2`, disconnects from USB
+and resets the MCU. Step 2 then starts the application. Thus the host
+sees a USB disconnect, and the application starts in the reset state.
 
 The bootloader resets the MCU on a fault.
-
-## Commands
-
-The bootloader reports protocol version 3.1 and supports these commands:
-
-| Code | Command | Behavior |
-|---|---|---|
-| `0x00` | Get | Version and command list |
-| `0x01` | Get Version | Version 3.1 |
-| `0x02` | Get ID | `0x0410` (STM32F10xx medium density) |
-| `0x11` | Read Memory | Flash, RAM, system memory, option bytes, flash size and UID registers. Other addresses get a NACK. |
-| `0x21` | Go | Application start address and valid application only |
-| `0x31` | Write Memory | Application area only |
-| `0x44` | Extended Erase | Application pages. `0xFFFF` (mass erase) erases the unprotected application pages. |
-| `0x63` | Write Protect | 4 KB groups of the application area, then a reset |
-| `0x73` | Write Unprotect | Application area, then a reset |
-| `0x82` | Readout Protect | Always NACK |
-| `0x92` | Readout Unprotect | Always NACK |
-
-An erase or a write in the bootloader area or in a write-protected group
-gets a NACK. The bootloader discards a command that stops for more than
-1 s between two bytes. A USB reset or a disconnect also discards the
-command.
 
 ## Flash protection
 
@@ -170,23 +162,27 @@ This occurs one time after a debug probe writes the bootloader. If the
 option byte update fails, the bootloader continues without the
 protection and tries again at the next start.
 
-One WRP bit protects a group of 4 KB (4 pages). Write Protect (`0x63`)
-and Write Unprotect (`0x73`) change only the groups of the application
-area. They erase the option bytes and write them again:
+One WRP bit protects a group of 4 KB (4 pages). The self-protection
+erases the option bytes and writes them again:
 
 - RDP (readout protection) is always `0xA5`: no readout protection.
 - The USER byte and the two data bytes keep their values.
-- The WRP bits of the bootloader area are always set.
+- The WRP bits of the bootloader area are set. The WRP bits of the
+  application area keep their values.
 
 The new values take effect after a reset. The bootloader resets the MCU
-after the command and stays in bootloader mode. The host then connects
-again.
+and stays in bootloader mode.
+
+The DFU bootloader cannot change the WRP bits of the application area.
+If a group of the application area is write-protected, for example by
+the Write Protect command of the AN3155 bootloader, a download reports
+`errERASE`. Remove the protection with a debug probe, see
+[Update the bootloader](#update-the-bootloader).
 
 The bootloader does not change the option bytes when readout protection
 (RDP) is active. On the STM32F1, the write of RDP `0xA5` then starts a
-mass erase of the full flash, also of the bootloader. Write Protect and
-Write Unprotect then get a NACK, and the bootloader runs without the
-self-protection.
+mass erase of the full flash, also of the bootloader. The bootloader
+then runs without the self-protection.
 
 A power loss during the option byte update erases all option bytes.
 After the erase, RDP is `0xFF`, which is readout protection. The

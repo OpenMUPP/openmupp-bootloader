@@ -150,8 +150,8 @@ else()
         "${CMAKE_CURRENT_LIST_DIR}/src/main.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/hw/Boot.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/hw/Flash.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/src/protocol/An3155Protocol.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/src/usb/UsbCdc.cpp")
+        "${CMAKE_CURRENT_LIST_DIR}/src/hw/UsbFs.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/src/protocol/DfuProtocol.cpp")
 
     foreach(_board IN LISTS _boards_to_build)
         string(TOUPPER "${_board}" _board_upper)
