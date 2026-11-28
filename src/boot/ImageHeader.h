@@ -27,6 +27,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <span>
 
 namespace image {
 
@@ -38,6 +40,8 @@ constexpr std::size_t resetVectorWord = 1;
 constexpr std::size_t magicWord = 0x1C / 4;
 constexpr std::size_t lengthWord = 0x20 / 4;
 constexpr std::size_t crcWord = 0x24 / 4;
+// The header ends at 0x2C, behind the reserved word 0x28.
+constexpr std::size_t headerWords = 0x2C / 4;
 // RISC-V: the first absolute handler address of the vector table (NMI).
 constexpr std::size_t riscvHandlerWord = 2;
 
@@ -102,6 +106,19 @@ constexpr bool headerIsValid(const uint32_t *words, uint32_t base, uint32_t maxL
    }
    const uint32_t reset = words[resetVectorWord];
    return (reset & 1) != 0 && (reset & ~1u) - base < length;
+}
+
+// headerIsValid() for the first bytes of an image, for example the first
+// block of a download, before the erase (issue #7). False when the bytes
+// do not hold all header words.
+inline bool headerIsValid(std::span<const uint8_t> bytes, uint32_t base, uint32_t maxLength, Arch arch = Arch::cortexM3) {
+   uint32_t words[headerWords];
+   if(bytes.size() < sizeof words) {
+      return false;
+   }
+   // The bytes need not be word-aligned. The MCUs and the hosts are little-endian.
+   std::memcpy(words, bytes.data(), sizeof words);
+   return headerIsValid(words, base, maxLength, arch);
 }
 
 // True when the image at base has a valid header (headerIsValid()) and a

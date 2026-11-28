@@ -2,6 +2,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
@@ -254,4 +255,48 @@ TEST_CASE("headerIsValid() checks the header rules without the CRC") {
    CHECK_FALSE(image::headerIsValid(riscvImage(0x40, 256, 0x1A0).data(), riscvBase, areaSize, image::Arch::riscv));
    CHECK(image::headerIsValid(stampedImage().data(), base, areaSize));
    static_assert(!image::headerIsValid(std::array<uint32_t, 16>{}.data(), base, areaSize));
+}
+
+namespace {
+
+// The image as bytes in memory order, at offset in the vector
+std::vector<uint8_t> bytesOf(const std::vector<uint32_t> &words, std::size_t offset = 0) {
+   std::vector<uint8_t> bytes(offset);
+   for(uint32_t word : words) {
+      for(int byte = 0; byte < 4; ++byte) {
+         bytes.push_back(static_cast<uint8_t>(word >> (8 * byte)));
+      }
+   }
+   return bytes;
+}
+
+} // namespace
+
+TEST_CASE("headerIsValid() checks the first bytes of an image, for example block 0 of a download") {
+   const auto riscv = bytesOf(riscvImage(0x40, 1024));
+   const std::span<const uint8_t> block{ riscv.data(), 1024 };
+   CHECK(image::headerIsValid(block, riscvBase, areaSize, image::Arch::riscv));
+   // The header ends at 0x2C: less is not enough
+   CHECK(image::headerIsValid(block.first(0x2C), riscvBase, areaSize, image::Arch::riscv));
+   CHECK_FALSE(image::headerIsValid(block.first(0x2B), riscvBase, areaSize, image::Arch::riscv));
+   CHECK_FALSE(image::headerIsValid(block.first(0), riscvBase, areaSize, image::Arch::riscv));
+   // The bytes need not be word-aligned
+   const auto shifted = bytesOf(riscvImage(0x40, 1024), 1);
+   CHECK(image::headerIsValid(std::span{ shifted }.subspan(1), riscvBase, areaSize, image::Arch::riscv));
+
+   // The other architecture, a wrong link address, a length above the
+   // area, and an image without a header are refused before the erase.
+   CHECK_FALSE(image::headerIsValid(block, riscvBase, areaSize));
+   const auto cortex = bytesOf(stampedImage(1024));
+   CHECK(image::headerIsValid(cortex, base, areaSize));
+   CHECK_FALSE(image::headerIsValid(cortex, base, areaSize, image::Arch::riscv));
+   CHECK_FALSE(image::headerIsValid(bytesOf(riscvImage(0x40, 1024, 0x1A0)), riscvBase, areaSize, image::Arch::riscv));
+   CHECK_FALSE(image::headerIsValid(block, riscvBase, 1020, image::Arch::riscv));
+   auto standalone = riscv;
+   std::fill(standalone.begin() + 0x1C, standalone.begin() + 0x2C, uint8_t{ 0 });
+   CHECK_FALSE(image::headerIsValid(standalone, riscvBase, areaSize, image::Arch::riscv));
+   // No CRC check: block 0 does not hold the full image
+   auto badCrc = riscv;
+   badCrc[0x24] ^= 1;
+   CHECK(image::headerIsValid(badCrc, riscvBase, areaSize, image::Arch::riscv));
 }
