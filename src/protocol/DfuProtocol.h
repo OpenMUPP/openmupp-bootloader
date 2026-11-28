@@ -9,8 +9,10 @@
 // start + n * transferSize. The host cannot select an address, so it cannot
 // write the bootloader area or the settings page.
 //
-// A download writes the blocks in order, from block 0. Before a block is
-// written, the pages under it are erased. The pages behind the last block
+// A download writes the blocks in order, from block 0. Block 0 must have a
+// valid image header (Application::headerIsValid(), without the CRC):
+// else the download gives errTARGET and erases nothing, so the old image
+// stays. Before a block is written, the pages under it are erased. The pages behind the last block
 // keep their content. The zero-length download ends the download: the
 // manifestation checks the image header and the CRC. A valid image puts
 // the device back into dfuIDLE (bitManifestationTolerant): dfu-util 0.11

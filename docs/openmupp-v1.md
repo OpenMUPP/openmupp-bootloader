@@ -17,6 +17,11 @@ dfu-util -d 1209:0001 -D openmupp-app-8k.bin
 - One alternate setting, "Application". Block n is at
   `0x08002000 + n x 1024`. The host cannot select an address, so it
   cannot write the bootloader area or the settings page of the firmware.
+- Before the first erase, the bootloader checks the image header in
+  block 0 (no CRC). With a header that is not valid, it reports
+  `errTARGET`, erases nothing and stays in DFU mode. The old application
+  stays in the flash. For example, it refuses an image for the
+  STM32F1 or an image without a header (`standalone`).
 - After a download, the bootloader checks the image header and the CRC.
   With a valid image, it starts the application. With an image that is
   not valid, it reports `errVERIFY` and stays in DFU mode.

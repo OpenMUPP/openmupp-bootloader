@@ -167,6 +167,12 @@ bool Protocol::write() {
    while(size % 4 != 0) {
       buffer_[size++] = 0xFF;
    }
+   // Block 0 holds the image header. Check it before the first erase, so
+   // that an image for another MCU or link address keeps the old image.
+   if(nextBlock_ == 0 && !application_.headerIsValid({ buffer_, blockSize_ })) {
+      fail(Status::errTarget);
+      return false;
+   }
    const uint32_t end = blockEnd();
    // The blocks come in order, so the pages below erasedEnd_ are erased in
    // this download. A block can end inside a page; the next block then
