@@ -1,184 +1,89 @@
 # OpenMUPP bootloader
 
-USB bootloader for the OpenMUPP firmware (Open Multi-architecture Universal
-Programmer & Probe) on boards with an STM32F103 microcontroller.
-The bootloader shows a USB CDC (Communication Device Class) serial port
-with the ID `0483:5740`. It uses the STM32 serial bootloader protocol
-(ST AN3155), so `stm32flash` can program the application.
+USB bootloader for the OpenMUPP firmware (Open Multi-architecture
+Universal Programmer & Probe). The bootloader lets the host write a new
+firmware over USB, without a debug probe. The main target is the
+OpenMUPP v1 probe with a CH32V307 microcontroller. The bootloader also
+builds for the older probe boards with an STM32F103 microcontroller.
 
-The old name of this project is versaloon-bootloader.
+The bootloader uses a different USB protocol on each MCU family:
+
+| MCU family | Boards | USB device | Host tool |
+|---|---|---|---|
+| CH32V307 | OpenMUPP v1 | USB DFU 1.1 (Device Firmware Upgrade), ID `1209:0001`, product "OpenMUPP Bootloader" | `dfu-util` |
+| STM32F103 | Versaloon Mini, ST-Link/V2-1, ST-Link/V2 mini clone | USB CDC (Communication Device Class) serial port, ID `0483:5740`, STM32 serial bootloader protocol (ST AN3155) | `stm32flash` |
+
+On all boards, the bootloader uses the first 8 KB of the flash, and the
+application starts at `0x08002000`. The bootloader starts only an
+application with a valid image header (see
+[Application image header](docs/image-header.md)). The application
+starts the bootloader with a boot request (see
+[Start the bootloader from the application](docs/boot-request.md)).
 
 ## Boards
 
 | Board | `BOARD` | Crystal | USB D+ pull-up | LED | Key |
 |---|---|---|---|---|---|
+| OpenMUPP v1 (CH32V307) | `openmuppv1` | 8 MHz | Internal (USBHS) | PA10 (red), PA9 (green), on when high | None, BOOT0 starts the ROM bootloader of WCH |
 | Versaloon Mini (MiniRelease1) | `mini` | 12 MHz | PC13 | PA15 (red), on when low | PB9 |
-| OtherUse | `otheruse` | 12 MHz | PA2 | PA15 (red), on when low | PB9 |
 | ST-Link/V2-1 of a Nucleo-64 board | `stlinkv21` | 8 MHz | PA15 | PA9: high is red, low is green | PA10 (SWO) |
 | ST-Link/V2 mini clone (USB stick) | `stlinkv2miniclone` | 8 MHz | Fixed | PA9: high is blue, low is red | PB7 (SWIM) |
-| OpenMUPP v1 (CH32V307) | `openmuppv1` | 8 MHz | Internal (USBHS) | PA10 (red), PA9 (green), on when high | None, see [OpenMUPP v1](#openmupp-v1-ch32v307) |
 
-The pull-up pin is high when the USB device is connected.
-The key is down when PB9 is low.
-On the ST-Link/V2 mini clone, the key is the SWIM pin of the header (PB7, low when down).
-On the ST-Link/V2-1, the key is pin 6 (SWO) of the SWD connector (PA10, low when down).
-Only the bootloader reads this key, so the application can use PA10 for SWO.
-The pins are the same as in OpenMUPP (`src/board/boards/`).
+The pins are the same as in OpenMUPP ([`src/board/boards/`](https://github.com/OpenMUPP/OpenMUPP/tree/dev/src/board/boards)).
 
-The ST-Link/V2-1 support is not tested on hardware. Its pins come from
-the Nucleo-64 schematics MB1136 (sheet 4) and MB1360 (sheet 7). The two
-boards use the same MCU pins. Do these checks on the real board before
-you use it:
+## Get the source code
 
-- An NPN transistor connects the 1.5 kOhm pull-up to D+. `USB_RENUMn`
-  (PA15) drives its base: high connects the pull-up, low disconnects it.
-  PA15 is an open-drain output. When PA15 is released, the divider on
-  the base sets a higher D+ level than a 3.3 V output does.
-  PA15 is JTDI after the reset, so the bootloader disables the JTAG-DP.
-  SWD stays on.
-- The key of the ST-Link/V2-1 is SWO (PA10) on pin 6 of the SWD
-  connector. Connect pin 6 to GND (pin 3), then connect the board to
-  USB. Do not connect pin 6 to a target that holds SWO low at the reset.
-  If you do, the bootloader starts.
-  On a MB1136 Nucleo that is not broken off, SWO also connects to PB3
-  of the target MCU through SB15. If the target drives PB3 low, open
-  SB15. Other Nucleo boards use other bridges. Read the user manual of
-  your board.
-- The original firmware has readout protection. `stm32f1x unlock 0`
-  removes it and erases all of the flash, see
-  [Update the bootloader](#update-the-bootloader).
-- The MCU (STM32F103CBT6) has no SWD header. Connect the debug probe to
-  the solder bridge pads of the "reserved" group, on the side away from
-  the jumper header. On MB1360, this is the pad next to the silkscreen
-  label of the solder bridge. The pads are different on the two boards:
-
-  | Signal | MCU pin | MB1136 | MB1360 |
-  |---|---|---|---|
-  | SWCLK (`STM_JTCK`) | PA14 (pin 37) | SB6 | SB8 |
-  | SWDIO (`STM_JTMS`) | PA13 (pin 34) | SB10 | SB12 |
-  | NRST (`STM_RST`) | NRST (pin 7) | SB11, the other pad is GND | JP1, the other pin is GND |
-  | 3.3 V | | SB4 | SB6 |
-  | GND | | SB8 | SB10 |
-
-  The pads of the "reserved" group are open. Do not close them.
-  Measure each pad to its MCU pin before you connect the probe.
-
-The ST-Link/V2 mini clone is the USB stick clone with a 2x5 header. Its
-pin map is measured (OpenMUPP `docs/stlinkv2-mini-clone.md`).
-It has a key: the SWIM pin of the header. The board connects SWIM to PB7
-to PB11 and has a pull-up on it. A wire from SWIM to GND at power-up
-starts the bootloader, also when the application is valid. Thus a broken
-application does not need a debug probe.
-
-The bootloader is tested on one mini clone. The boot request, the key,
-the D+ disconnect, and a write and GO with `stm32flash` pass. The MCU of
-that board has ST markings, but it is an STM32F103 compatible MCU, not a
-genuine STM32F103.
-
-## OpenMUPP v1 (CH32V307)
-
-The bootloader of OpenMUPP v1 is a USB DFU 1.1 device (Device Firmware
-Upgrade). It is not an AN3155 device. The host tool is `dfu-util`:
+The libraries are Git submodules in `dependencies/`.
+Clone with the submodules:
 
 ```sh
-dfu-util -d 1209:0001 -D openmupp-app-8k.bin
+git clone --recurse-submodules https://github.com/OpenMUPP/openmupp-bootloader.git
 ```
 
-- USB ID: `1209:0001`, product "OpenMUPP Bootloader". The serial number is
-  the chip UID, as in the firmware.
-- One alternate setting, "Application". Block n is at `0x08002000 + n x
-  1024`. The host cannot select an address, so it cannot write the
-  bootloader area or the settings page of the firmware.
-- After a download, the bootloader checks the image header and the CRC.
-  With a valid image, it starts the application. With an image that is not
-  valid, it reports `errVERIFY` and stays in DFU mode.
-- `dfu-util -U` reads the application area.
-- USBHS runs at full speed. The bootloader polls EP0. It has no other
-  endpoint and no interrupt.
-- Windows binds WinUSB through MS OS 2.0 descriptors.
-- The bootloader erases 4 KB sectors. Each sector erase takes about 16 ms.
+In an existing clone, run `git submodule update --init --recursive`.
 
-Link the application at `0x00002000`, the flash alias of `0x08002000`, with
-the reset jump (`j _start`) at offset 0. The bootloader jumps to the alias.
-The startup code loads `gp` and `sp` relative to the PC, so an image that
-is linked at `0x08002000` gets wrong pointers. The stamp tool refuses such
-an image.
+The submodules are:
 
-The key of OpenMUPP v1 is on BOOT0. A key that is down at a reset starts
-the ROM ISP bootloader of WCH (`4348:55e0`, `wchisp`), not this bootloader.
-Thus the ROM bootloader is the recovery path when this bootloader is
-damaged. The application starts this bootloader with the boot request
-(see [Start the bootloader from the application](#start-the-bootloader-from-the-application)):
-`0xB007` in `BKP_DATAR1`, then a system reset.
+- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V30x. Only the OpenMUPP v1 board (`openmuppv1`) uses it. The primary repository is https://github.com/armint/ch32v00x-system.
+- `system-stm32`: start-up code, CMSIS and peripheral drivers of the STM32. Only the STM32F1 boards use it. The primary repository is https://github.com/armint/system-stm32.
 
-The bootloader is 5.3 KB of the 8 KB area. The application area ends at
-the end of the zero-wait flash (256 KB with the default user option
-`CODE-256KB + RAM-64KB`). The bootloader does not set a write protection
-yet.
+## Requirements
 
-Build it with the RISC-V toolchain (xPack `riscv-none-elf-gcc`) and the
-preset `openmuppv1`. The build gets `ch32v00x-system` from the submodule
-`dependencies/ch32v00x-system`:
+- CMake 3.21 or later.
+- The xPack RISC-V GCC (`riscv-none-elf`), for example 15.2.0-1 as in CI.
+- For the Versaloon Mini and the ST-Link boards only: the Arm GNU Toolchain (`arm-none-eabi`), for example 15.3.rel2 as in CI.
+- A host C++ compiler with C++23 support, for the unit tests.
+- `clang-format`, for the `clangformat` target.
+- Internet access at configure time: CMake FetchContent downloads doctest, and `system-stm32` downloads the CMSIS headers.
+
+## Build the bootloader
+
+Select a preset. Give the install directory of the toolchain with `-DGCC_TOOLCHAIN_PREFIX`. Then configure and build:
 
 ```sh
-RISCV_GCC_TOOLCHAIN_PREFIX=<toolchain root> cmake --preset openmuppv1
-cmake --build --preset openmuppv1
+cmake --preset openmuppv1 \
+      -DGCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1
+cmake --build --preset openmuppv1 -j
 ```
 
-On Linux, the user needs access to the device, for example with this udev
-rule:
+The build directory is `build/<preset>`, here `build/openmuppv1`.
+If the compiler of the toolchain is in the `PATH`, you can omit `GCC_TOOLCHAIN_PREFIX`.
+When the option is not set, the toolchain files also read an environment variable.
+The RISC-V toolchain file reads `RISCV_GCC_TOOLCHAIN_PREFIX`.
+The Arm toolchain file reads `GCC_TOOLCHAIN_PREFIX` or `ARM_GNU_TOOLCHAIN`.
 
-```text
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP Bootloader", MODE="0660", TAG+="uaccess"
-```
-
-## Memory layout
-
-| Area | Address | Size |
-|---|---|---|
-| Bootloader | `0x08000000` | 8 KB |
-| Application | `0x08002000` | Rest of the flash: 56 KB on a 64 KB part |
-
-The layout is the same for all boards.
-
-The bootloader was rewritten in C++ (issue #4). The legacy bootloader used
-a 10 KB area, with the application at `0x08002800`. The two layouts are not
-compatible. A board with the legacy bootloader keeps the legacy layout
-until you write the new bootloader with a debug probe, see
-[Update the bootloader](#update-the-bootloader). The legacy bootloader has
-the tag `v1-legacy`.
-
-The flash size is different on each part. For example, the STM32F103C8
-has 64 KB and the STM32F103CB has 128 KB. The bootloader reads the flash
-size from the flash size register (`0x1FFFF7E0`) at run time. It sends a
-NACK (negative acknowledge) for a write or an erase outside the flash.
-
-## Build
-
-You need CMake 3.21 or later and the Arm GNU toolchain
-(`arm-none-eabi-gcc`, `arm-none-eabi-g++`). The build gets the library
-`system-stm32` from the submodule `dependencies/system-stm32`. Get it
-before the first build:
+Each board has a preset with the name of the board.
+The STM32F1 boards (`mini`, `stlinkv21`, `stlinkv2miniclone`) need the Arm GNU Toolchain:
 
 ```sh
-git submodule update --init
+cmake --preset mini \
+      -DGCC_TOOLCHAIN_PREFIX=/opt/arm-gnu-toolchain-15.3.rel2-x86_64-arm-none-eabi
+cmake --build --preset mini -j
 ```
 
-`system-stm32` downloads the CMSIS headers from GitHub at configure
-time.
+`cmake --list-presets` shows all presets.
 
-Each board has a CMake preset. To build the bootloader for one board:
-
-```sh
-cmake --preset mini
-cmake --build --preset mini
-```
-
-Use the preset `otheruse` for the OtherUse board, `stlinkv21` for the
-ST-Link/V2-1 and `stlinkv2miniclone` for the ST-Link/V2 mini clone.
-
-The build writes these files to the build directory. A preset uses
-`build/<board>/`:
+The build writes these files into the build directory:
 
 - `openmupp-bootloader-<board>.elf`
 - `openmupp-bootloader-<board>.hex`
@@ -186,58 +91,36 @@ The build writes these files to the build directory. A preset uses
 - `openmupp-bootloader-<board>.map`
 
 The build fails when the image is larger than the bootloader area
-(8 KB). In that case the build removes the image files. The image is
-about 7 KB. When the image grows above 7.5 KB, change to the 12 KB area.
-
-The toolchain file `cmake/gcc_arm.cmake` finds the compiler in the
-`PATH`. To use another toolchain, set `GCC_TOOLCHAIN_PREFIX` to the root
-directory of the toolchain. You can set it as a CMake variable
-(`-DGCC_TOOLCHAIN_PREFIX=<dir>`) or as an environment variable. The
-toolchain file also sets `arm-none-eabi-gcc-ar` and
-`arm-none-eabi-gcc-ranlib`, because the build uses link-time
-optimisation (LTO).
+(8 KB). In that case the build removes the image files. The OpenMUPP v1
+image is about 5.3 KB, and the STM32F1 image is about 7 KB. When the
+STM32F1 image grows above 7.5 KB, change to the 12 KB area.
 
 These CMake options change the build:
 
 | Option | Default | Content |
 |---|---|---|
-| `BOARD` | *(empty)* | Board to build for (`mini`, `otheruse`, `stlinkv21`, `stlinkv2miniclone`). Overrides `OPENMUPP_BOOTLOADER_BOARDS`. A preset selects one board. |
-| `OPENMUPP_BOOTLOADER_BOARDS` | `mini;otheruse` | Boards to build when `BOARD` is not set. Use a semicolon list for multiple boards. All boards of one build must have the same crystal: build `stlinkv21` and `stlinkv2miniclone` alone or together. |
-| `OPENMUPP_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit protects 4 KB. |
-| `MUPP_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` |
-| `MUPP_LTO` | `ON` | Link-time optimisation |
+| `BOARD` | *(empty)* | Board to build for (`openmuppv1`, `mini`, `stlinkv21`, `stlinkv2miniclone`). Overrides `OPENMUPP_BOOTLOADER_BOARDS`. A preset selects one board. |
+| `OPENMUPP_BOOTLOADER_BOARDS` | `mini;otheruse` | STM32F1 boards to build when `BOARD` is not set. Use a semicolon list for more than one board. All boards of one build must have the same crystal: build `stlinkv21` and `stlinkv2miniclone` alone or together. |
+| `OPENMUPP_BOOTLOADER_AREA_SIZE` | `8192` | Size of the bootloader area in bytes. It must be a multiple of 4096, because one write protection bit of the STM32F1 protects 4 KB. |
+| `MUPP_CH32V00X_SYSTEM_DIR` | `dependencies/ch32v00x-system` | Source directory of `ch32v00x-system` (OpenMUPP v1) |
+| `MUPP_SYSTEM_STM32_DIR` | `dependencies/system-stm32` | Source directory of `system-stm32` (STM32F1 boards) |
+| `MUPP_LTO` | `ON` | Link-time optimisation (LTO) |
 | `MUPP_WERROR` | `OFF` | Warnings in the bootloader sources are errors. CI sets it. |
-| `MUPP_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images, see [Host tests](#host-tests) |
-| `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
+| `MUPP_HOST_TESTS` | `OFF` | Build the host unit tests instead of the images |
+| `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the GNU toolchain |
+
+The toolchain file `cmake/gcc_arm.cmake` also sets `arm-none-eabi-gcc-ar`
+and `arm-none-eabi-gcc-ranlib`, because the build uses LTO.
 
 Without a preset, configure and build for one board:
 
 ```sh
-cmake -S . -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini
+cmake -S . -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake \
+      -DBOARD=mini -DGCC_TOOLCHAIN_PREFIX=<Arm toolchain root>
 cmake --build build/mini
 ```
 
-### Use in a parent project
-
-A parent project (for example OpenMUPP) builds this repository
-with `ExternalProject`. Pass `CMAKE_TOOLCHAIN_FILE` and
-`OPENMUPP_BOOTLOADER_BOARDS` in `CMAKE_ARGS`. The install step copies
-the `.elf`, `.hex` and `.bin` files of each board to
-`CMAKE_INSTALL_PREFIX`. The same files are in the build directory of the
-external project.
-
-Pass `MUPP_SYSTEM_STM32_DIR` with the `system-stm32` directory of the
-parent project. Then the two projects use the same library commit, and
-the parent does not need the nested submodule. Without it, the parent
-must check out the submodules recursively.
-
-A parent project can also add this repository with `add_subdirectory()`.
-The parent project must set a cross toolchain with C, C++ and ASM before
-its first `project()` call. This does not work when the parent project
-has a target `system-stm32` or `art-build-config`. Then the configure
-step stops with an error: use `ExternalProject`.
-
-### Host tests
+For `BOARD=openmuppv1`, use `cmake/gcc_riscv.cmake` and the RISC-V toolchain.
 
 The host unit tests use doctest and the host C++ compiler. The build
 downloads doctest from GitHub. The tests are in `tests/`.
@@ -248,306 +131,38 @@ cmake --build --preset host-tests
 ctest --preset host-tests
 ```
 
-## Use
+## Write the firmware
 
-1. Hold the key (PB9) down and reset the board. An application can also
-   send a boot request, see
-   [Start the bootloader from the application](#start-the-bootloader-from-the-application).
-   On the ST-Link/V2-1, connect SWO (SWD connector pin 6) to GND
-   (pin 3), then connect the board to USB.
-   On the ST-Link/V2 mini clone, connect SWIM (header pin 3) to GND
-   (header pin 5), then connect the board to USB.
-2. The bootloader starts and the LED comes on. The LED
-   flickers when there is USB traffic.
-3. Write a stamped application image (see
-   [Application image header](#application-image-header)) with
-   `stm32flash`:
+The application is the `app-8k` image of the OpenMUPP firmware build, `openmupp-app-8k.bin`.
+First start the bootloader.
 
-   ```sh
-   stm32flash -w app.bin -v -S 0x08002000 /dev/ttyACM0
-   ```
-
-4. Start the application:
-
-   ```sh
-   stm32flash -g 0x08002000 /dev/ttyACM0
-   ```
-
-The bootloader sends a NACK to `GO` when the application is not valid.
-`GO` accepts only the application start address.
-
-### Start-up
-
-The bootloader decides straight after the reset, before the clock setup.
-It uses this order:
-
-1. `0xB007` in `BKP->DR1` (boot request): stay in the bootloader.
-2. GO token in `BKP->DR2`: start the application.
-3. Key down: stay in the bootloader.
-4. Application not valid: stay in the bootloader.
-5. Otherwise: start the application.
-
-The bootloader clears the boot request and the GO token. Each has an
-effect for one reset only.
-
-The application starts with all peripherals in their reset state. The
-bootloader sets `VTOR` and the main stack pointer from the application
-vector table. Then it jumps to the reset vector with all interrupts masked
-(`PRIMASK` set). The application must clear `PRIMASK`.
-
-`GO` does not jump from the bootloader. It writes the GO token to
-`BKP->DR2`, disconnects from USB and resets the MCU. Step 2 then starts
-the application. Thus the host sees a USB disconnect, and the application
-starts in the reset state.
-
-The bootloader resets the MCU on a fault.
-
-### Commands
-
-The bootloader reports protocol version 3.1 and supports these commands:
-
-| Code | Command | Behavior |
-|---|---|---|
-| `0x00` | Get | Version and command list |
-| `0x01` | Get Version | Version 3.1 |
-| `0x02` | Get ID | `0x0410` (STM32F10xx medium density) |
-| `0x11` | Read Memory | Flash, RAM, system memory, option bytes, flash size and UID registers. Other addresses get a NACK. |
-| `0x21` | Go | Application start address and valid application only |
-| `0x31` | Write Memory | Application area only |
-| `0x44` | Extended Erase | Application pages. `0xFFFF` (mass erase) erases the unprotected application pages. |
-| `0x63` | Write Protect | 4 KB groups of the application area, then a reset |
-| `0x73` | Write Unprotect | Application area, then a reset |
-| `0x82` | Readout Protect | Always NACK |
-| `0x92` | Readout Unprotect | Always NACK |
-
-An erase or a write in the bootloader area or in a write-protected group
-gets a NACK. A command that stops for more than 1 s between two bytes is
-discarded. A USB reset or a disconnect also discards the command.
-
-## Flash protection
-
-The bootloader area is always write-protected. At each start in
-bootloader mode, the bootloader reads the write protection (WRP) bits of
-its area. If a bit is clear, the bootloader sets it and resets the MCU.
-This occurs one time after a debug probe writes the bootloader. If the
-option byte update fails, the bootloader continues without the protection
-and tries again at the next start.
-
-One WRP bit protects a group of 4 KB (4 pages). Write Protect (`0x63`)
-and Write Unprotect (`0x73`) change only the groups of the application
-area. They erase the option bytes and write them again:
-
-- RDP (readout protection) is always `0xA5`: no readout protection.
-- The USER byte and the two data bytes keep their values.
-- The WRP bits of the bootloader area are always set.
-
-The new values take effect after a reset. The bootloader resets the MCU
-after the command and stays in bootloader mode. The host then connects
-again.
-
-The bootloader does not change the option bytes when readout protection
-(RDP) is active. On the STM32F1, the write of RDP `0xA5` then starts a
-mass erase of the full flash, also of the bootloader. Write Protect and
-Write Unprotect then get a NACK, and the bootloader runs without the
-self-protection.
-
-A power loss during the option byte update erases all option bytes. After
-the erase, RDP is `0xFF`, which is readout protection. The bootloader
-still runs, but it cannot change the option bytes. The write protection is
-removed. Only a debug probe can remove the readout protection, for example
-with OpenOCD `stm32f1x unlock 0`. This also erases all of the flash: write
-the bootloader and the application again.
-
-The bootloader keeps the USER byte. If the USER byte selects the hardware
-watchdog (`WDG_SW` = 0), the bootloader reloads the watchdog in its main
-loop.
-
-### Update the bootloader
-
-To write a new bootloader, use a debug probe (SWD). Remove the write
-protection first. For example, with OpenOCD and an ST-Link:
+On OpenMUPP v1, write the application with `dfu-util`:
 
 ```sh
-openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-    -c "init; reset halt; stm32f1x unlock 0; reset halt; exit"
-openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-    -c "program build/mini/openmupp-bootloader-mini.hex verify reset exit"
+dfu-util -d 1209:0001 -D openmupp-app-8k.bin
 ```
 
-`stm32f1x unlock 0` erases the option bytes and removes all write
-protection. The change takes effect after a reset. If the write fails
-after the unlock, disconnect the power for some seconds and try again.
-At its first start, the new bootloader protects its area again.
+See [docs/openmupp-v1.md](docs/openmupp-v1.md#start-the-bootloader) for the start of the bootloader and the details.
 
-The application stays in the flash. Write it again only when the layout
-changes, for example from the legacy layout.
+On an STM32F1 board, write a stamped application with `stm32flash`, then
+start it:
 
-## Application image header
+```sh
+stm32flash -w app.bin -v -S 0x08002000 /dev/ttyACM0
+stm32flash -g 0x08002000 /dev/ttyACM0
+```
 
-Each application image has a header with a CRC (cyclic redundancy check).
-The bootloader starts only an application with a valid header. Thus a
-blank or half-written application does not start: the board stays in the
-bootloader. An image without the header also stays in the bootloader. The
-legacy bootloader ignores the header, so a stamped image also runs behind
-it.
+See [docs/stm32f1.md](docs/stm32f1.md#write-the-application) for the start of the bootloader and the details.
 
-The bootloader calculates the CRC with the CRC unit of the STM32F1, at
-each start. 56 KB take some ms.
+## Documentation
 
-The header uses the reserved words of the Cortex-M3 vector table, at the
-start of the application. A CH32V307 image starts with the `j _start` of
-the reset handler, and its vector table follows at offset 4. The header
-has the same offsets there. On the QingKe V4F, `0x1C` and `0x28` are
-reserved exceptions. `0x20` is the Ecall-U entry and `0x24` is the
-BreakPoint entry. The firmware runs in machine mode, so it does not use
-Ecall-U. The firmware must not use a BreakPoint handler: without a
-debugger, an `ebreak` jumps to the CRC value. The CH32V307 bootloader
-uses its CRC unit, which gives the same CRC as the STM32F1 unit.
-
-| Offset | Content |
+| Document | Content |
 |---|---|
-| `0x1C` | Magic `0x314C5356` (`"VSL1"` in memory) |
-| `0x20` | Image length in bytes, a multiple of 4, from the application start |
-| `0x24` | CRC32 of the image |
-| `0x28` | Reserved, `0` |
-
-The CRC uses the algorithm of the STM32F1 CRC unit (CRC-32/MPEG-2):
-
-- Polynomial `0x04C11DB7`, initial value `0xFFFFFFFF`.
-- The input is 32-bit little-endian words. The unit reads each word from
-  the most significant bit.
-- No reflection and no final XOR.
-
-The CRC covers the full image. The words at `0x1C` to `0x27` count as
-zero. A gap between two sections of the image counts as `0xFF` (erased
-flash), because a debug probe does not write the gaps. The test vectors
-are in `tests/vectors/crc32-stm32.txt`.
-
-An application is valid when all of these rules are true:
-
-- The magic is correct.
-- The length is a multiple of 4, between 64 bytes and the size of the
-  application area.
-- The CRC is correct.
-- Cortex-M3: the initial stack pointer (word `0x00`) is in RAM, and the
-  reset vector (word `0x04`) is odd and inside the image.
-- RISC-V (CH32V307): word `0x00` is a `j` (JAL x0) to an address inside the
-  image, behind the header.
-
-### Stamp tool
-
-`tools/mupp-stamp-image.py` adds the header to an ELF image. It needs
-Python 3.7 or later and the objcopy of the toolchain
-(`arm-none-eabi-objcopy` or `riscv-none-elf-objcopy`), and no other
-packages. It takes the architecture from the ELF header, and selects the
-objcopy for that architecture. Use `--objcopy` for an objcopy that is not
-in `PATH`. For `--check` of a
-CH32V307 image, add `--arch riscv`.
-
-```sh
-tools/mupp-stamp-image.py app.elf --bin app.bin --hex app.hex --max-length 57344
-```
-
-The application starts at `0x08002000`. The application area of an
-STM32F103x8 (64 KB flash) is 57344 bytes (56 KB).
-
-- The tool writes the header into the `.isr_vector` section of the ELF
-  file. Thus an image that a debug probe writes also has the header.
-- `--bin` and `--hex` write the stamped image as a binary file and an
-  Intel HEX file.
-- `--max-length <bytes>` is the size of the application area. The tool
-  fails when the image is larger.
-- The tool refuses an image where the words `0x1C` to `0x2B` are not zero.
-  An image that has a header already gets a new header.
-- When the image length is not a multiple of 4, the tool adds `0xFF`
-  bytes (erased flash). The `.bin` and `.hex` files include these bytes.
-- The `.bin` and `.hex` files contain `0xFF` in the gaps between
-  sections, as the CRC does.
-- Without `--max-length`, the tool refuses an image larger than 128 KB
-  (Cortex-M3) or 256 KB (RISC-V).
-  For example, a section in RAM without a load address in flash gives a
-  very large image.
-
-To check a binary image or a flash dump, use `--check`. Set `--base` to
-the application start address:
-
-```sh
-tools/mupp-stamp-image.py --check app.bin --base 0x08002000
-```
-
-### CMake
-
-A CMake project adds the header with a post-build step:
-
-```cmake
-include(<openmupp-bootloader>/cmake/MuppStampImage.cmake)
-mupp_stamp_image(app.elf BIN app.bin HEX app.hex MAX_LENGTH 57344)
-```
-
-`BIN`, `HEX` and `MAX_LENGTH` are optional.
-
-Use the `BIN` and `HEX` files of `mupp_stamp_image()` to program the
-application. Do not make the `.bin` or `.hex` file with a separate `objcopy`
-step. `objcopy -O binary` fills the gaps between sections with `0x00`, so
-the CRC is not correct. If a separate step is necessary, add
-`--gap-fill 0xff` and run it after `mupp_stamp_image()`. Post-build steps
-run in the order of the calls.
-
-### Tool tests
-
-The tool tests use the Python `unittest` module:
-
-```sh
-python3 -m unittest discover -s tools/tests
-```
-
-The tests that build an ELF image need `arm-none-eabi-gcc` and `cmake`.
-Without them, these tests are skipped.
-
-## Start the bootloader from the application
-
-An application starts the bootloader with a boot request in the backup
-register `BKP->DR1`. Applications depend on this contract:
-
-| Item | Value |
-|---|---|
-| Register | `BKP->DR1` |
-| Boot request value | `0xB007` |
-
-The application does these steps:
-
-1. Enable the `PWR` and `BKP` clocks.
-2. Set `PWR_CR.DBP` to enable write access to the backup domain.
-3. Write `0xB007` to `BKP->DR1`.
-4. Call `NVIC_SystemReset()`.
-
-```c
-RCC->APB1ENR |= RCC_APB1ENR_PWREN | RCC_APB1ENR_BKPEN;
-PWR->CR |= PWR_CR_DBP;
-BKP->DR1 = 0xB007;
-NVIC_SystemReset();
-```
-
-After the reset, the bootloader reads `BKP->DR1`. If the value is
-`0xB007`, the bootloader clears the register and stays in bootloader mode.
-This is the same behavior as with the key down. The next reset without a
-request starts the application again.
-
-The bootloader checks the request straight after the reset, before it
-reads the key (see [Start-up](#start-up)). A system reset does not clear
-`BKP->DR1`. A power-up clears `BKP->DR1` only when the backup domain
-(VBAT) had no power.
-
-The bootloader also uses these backup registers. An application must not
-use them:
-
-| Register | Use |
-|---|---|
-| `BKP->DR2` | GO token: start the application after the reset |
-| `BKP->DR3` | The bootloader tried to protect its area before the last reset |
-
-The legacy functions `entryFromProgram()` and the reset with a magic
-number in RAM are removed. Use the boot request in `BKP->DR1`.
+| [docs/openmupp-v1.md](docs/openmupp-v1.md) | The DFU bootloader of OpenMUPP v1: the DFU device, the udev rule, the start of the bootloader, the memory layout and the link address of the application |
+| [docs/stm32f1.md](docs/stm32f1.md) | The AN3155 bootloader of the STM32F1 boards: board notes, memory layout, write steps, start-up, commands, flash protection and the update of the bootloader |
+| [docs/image-header.md](docs/image-header.md) | The application image header, the CRC, the stamp tool and its CMake function |
+| [docs/boot-request.md](docs/boot-request.md) | The boot request that an application sends to start the bootloader, and the backup registers of the bootloader |
+| [docs/parent-project.md](docs/parent-project.md) | How a parent project, for example OpenMUPP, builds this repository |
 
 ## Contributing
 
@@ -561,4 +176,4 @@ This project is free software. You can redistribute it and modify it under the t
 The program has no warranty.
 
 `cmake/ClangFormat.cmake` uses the Boost Software License 1.0. See [LICENSES/BSL-1.0.txt](LICENSES/BSL-1.0.txt).
-The submodule `system-stm32` uses the MIT license. The build also downloads the CMSIS headers of Arm and ST (Apache-2.0).
+The submodules `system-stm32` and `ch32v00x-system` use the MIT license. The WCH device files of `ch32v00x-system` keep the WCH terms (see its README). The build also downloads the CMSIS headers of Arm and ST (Apache-2.0).
