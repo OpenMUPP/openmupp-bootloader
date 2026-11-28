@@ -38,6 +38,8 @@ constexpr std::size_t resetVectorWord = 1;
 constexpr std::size_t magicWord = 0x1C / 4;
 constexpr std::size_t lengthWord = 0x20 / 4;
 constexpr std::size_t crcWord = 0x24 / 4;
+// RISC-V: the first absolute handler address of the vector table (NMI).
+constexpr std::size_t riscvHandlerWord = 2;
 
 constexpr uint32_t minLength = 64;
 
@@ -64,22 +66,22 @@ constexpr int32_t riscvJumpOffset(uint32_t instruction) {
    return static_cast<int32_t>(imm);
 }
 
-// True when the image at base has a valid header and CRC:
+// True when the header words of the image at base obey the rules. This
+// does not read the words behind the header and does not check the CRC:
 //
 // - The magic is correct.
 // - The length is a multiple of 4, between minLength and maxLength.
 // - Cortex-M3: the initial SP is in the RAM, and the reset vector is odd
 //   (Thumb) and inside the image.
 // - RISC-V: word 0 is a "j" to an address inside the image, behind the
-//   vector table words of the header.
-// - The CRC is correct.
+//   vector table words of the header. The handler address in vector word 2
+//   is inside the image. The "j" is PC-relative, so only the handler
+//   address shows an image that is linked at another address (issue #6).
 //
-// words: the image in memory, at the address base. maxLength: the size of
-// the application area.
-// Crc: reset() starts a new CRC, add(word) adds one word, value() gives
-// the CRC.
-template <typename Crc>
-bool isValid(const uint32_t *words, uint32_t base, uint32_t maxLength, Crc &crc, Arch arch = Arch::cortexM3) {
+// words: the image in memory. base: the address where the image is linked
+// and starts (on the CH32V307, the address in the flash alias at 0).
+// maxLength: the size of the application area.
+constexpr bool headerIsValid(const uint32_t *words, uint32_t base, uint32_t maxLength, Arch arch = Arch::cortexM3) {
    if(words[magicWord] != magic) {
       return false;
    }
@@ -92,16 +94,27 @@ bool isValid(const uint32_t *words, uint32_t base, uint32_t maxLength, Crc &crc,
       if(target < static_cast<int32_t>((crcWord + 2) * 4) || static_cast<uint32_t>(target) >= length) {
          return false;
       }
-   } else {
-      const uint32_t sp = words[stackPointerWord];
-      if(sp < ramStart || sp - ramStart > ramSize) {
-         return false;
-      }
-      const uint32_t reset = words[resetVectorWord];
-      if((reset & 1) == 0 || (reset & ~1u) - base >= length) {
-         return false;
-      }
+      return words[riscvHandlerWord] - base < length;
    }
+   const uint32_t sp = words[stackPointerWord];
+   if(sp < ramStart || sp - ramStart > ramSize) {
+      return false;
+   }
+   const uint32_t reset = words[resetVectorWord];
+   return (reset & 1) != 0 && (reset & ~1u) - base < length;
+}
+
+// True when the image at base has a valid header (headerIsValid()) and a
+// correct CRC.
+//
+// Crc: reset() starts a new CRC, add(word) adds one word, value() gives
+// the CRC.
+template <typename Crc>
+bool isValid(const uint32_t *words, uint32_t base, uint32_t maxLength, Crc &crc, Arch arch = Arch::cortexM3) {
+   if(!headerIsValid(words, base, maxLength, arch)) {
+      return false;
+   }
+   const uint32_t length = words[lengthWord];
    crc.reset();
    for(std::size_t i = 0; i < length / 4; ++i) {
       crc.add(i >= magicWord && i <= crcWord ? 0 : words[i]);

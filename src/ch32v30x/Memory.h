@@ -17,6 +17,9 @@
 
 namespace ch32::memory {
 
+// The application is linked at its address in the flash alias at 0, and
+// the bootloader jumps there.
+constexpr uint32_t applicationAlias = layout::applicationStart - layout::flashBase;
 constexpr uint32_t applicationEnd = layout::flashBase + 256 * 1024;
 // The erase unit: the 4 KB sector of the standard erase. It takes as long
 // as one 256-byte fast erase (16 ms). The programming uses 256-byte pages.

@@ -47,7 +47,10 @@ An application is valid when all of these rules are true:
 - Cortex-M3: the initial stack pointer (word `0x00`) is in RAM, and the
   reset vector (word `0x04`) is odd and inside the image.
 - RISC-V (CH32V307): word `0x00` is a `j` (JAL x0) to an address inside
-  the image, behind the header.
+  the image, behind the header. The handler address at `0x08` (the NMI
+  entry) is inside the image. The image starts at `0x00002000`, the
+  application start in the flash alias. The `j` is PC-relative, so only
+  this handler address shows an image with a different link address.
 
 ## Stamp tool
 

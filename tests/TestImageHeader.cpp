@@ -2,6 +2,7 @@
 
 #include <doctest/doctest.h>
 
+#include <array>
 #include <cstdint>
 #include <fstream>
 #include <sstream>
@@ -190,18 +191,22 @@ constexpr uint32_t jal(uint32_t imm) {
           ((imm >> 12) & 0xFFu) << 12 | 0x06Fu;
 }
 
+// The application start of the CH32V307 in the flash alias at 0
+constexpr uint32_t riscvBase = 0x0000'2000;
+
 // A stamped CH32V307 image: "j _start" in word 0, the vector table behind it
-std::vector<uint32_t> riscvImage(uint32_t jumpTo, uint32_t length = 256) {
+std::vector<uint32_t> riscvImage(uint32_t jumpTo, uint32_t length = 256, uint32_t handler = riscvBase + 0xA0) {
    std::vector<uint32_t> words = stampedImage(length);
    words[0] = jal(jumpTo);
-   words[1] = 0x0000'2100; // a vector entry, no Thumb bit
+   words[1] = 0;
+   words[image::riscvHandlerWord] = handler; // NMI handler, no Thumb bit
    restamp(words);
    return words;
 }
 
 bool validRiscv(const std::vector<uint32_t> &words) {
    fakes::SoftwareCrc crc;
-   return image::isValid(words.data(), base, areaSize, crc, image::Arch::riscv);
+   return image::isValid(words.data(), riscvBase, areaSize, crc, image::Arch::riscv);
 }
 
 } // namespace
@@ -227,4 +232,26 @@ TEST_CASE("A RISC-V image needs a jump into the image behind the header") {
    CHECK_FALSE(validRiscv(noJump));
    // The Cortex-M3 rules do not apply: word 0 is no stack pointer
    CHECK_FALSE(valid(riscvImage(0x40)));
+}
+
+TEST_CASE("A RISC-V image needs a handler address inside the image") {
+   CHECK(validRiscv(riscvImage(0x40, 256, riscvBase)));
+   CHECK(validRiscv(riscvImage(0x40, 256, riscvBase + 0xFC)));
+   // Issue #6: a standalone image, linked at 0. The jump and the CRC are
+   // correct, but the handler address is below the application start.
+   CHECK_FALSE(validRiscv(riscvImage(0x40, 256, 0x1A0)));
+   CHECK_FALSE(validRiscv(riscvImage(0x40, 256, riscvBase - 4)));
+   CHECK_FALSE(validRiscv(riscvImage(0x40, 256, riscvBase + 0x100))); // behind the image
+   CHECK_FALSE(validRiscv(riscvImage(0x40, 256, riscvBase + 0x0800'0000))); // linked at 0x08002000
+}
+
+TEST_CASE("headerIsValid() checks the header rules without the CRC") {
+   auto words = riscvImage(0x40);
+   CHECK(image::headerIsValid(words.data(), riscvBase, areaSize, image::Arch::riscv));
+   words[image::crcWord] ^= 1;
+   CHECK(image::headerIsValid(words.data(), riscvBase, areaSize, image::Arch::riscv));
+   CHECK_FALSE(validRiscv(words));
+   CHECK_FALSE(image::headerIsValid(riscvImage(0x40, 256, 0x1A0).data(), riscvBase, areaSize, image::Arch::riscv));
+   CHECK(image::headerIsValid(stampedImage().data(), base, areaSize));
+   static_assert(!image::headerIsValid(std::array<uint32_t, 16>{}.data(), base, areaSize));
 }
