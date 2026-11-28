@@ -1,7 +1,7 @@
 # STM32F1 boards
 
 This document describes the AN3155 bootloader of the boards with an STM32F103: the Versaloon Mini, the ST-Link/V2-1 and the ST-Link/V2 mini clone.
-The [README](../README.md#build) tells how to build it.
+The [README](../README.md#build-the-bootloader) tells how to build it.
 
 ## Board notes
 

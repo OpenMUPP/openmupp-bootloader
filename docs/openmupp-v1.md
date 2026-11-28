@@ -1,7 +1,7 @@
 # OpenMUPP v1 (CH32V307)
 
 This document describes the DFU bootloader of the OpenMUPP v1 probe.
-The [README](../README.md#build) tells how to build it.
+The [README](../README.md#build-the-bootloader) tells how to build it.
 
 ## Write the application
 

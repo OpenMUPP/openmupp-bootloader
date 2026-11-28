@@ -31,40 +31,57 @@ starts the bootloader with a boot request (see
 
 The pins are the same as in OpenMUPP (`src/board/boards/`).
 
-## Build
+## Get the source code
 
-You need CMake 3.21 or later and one of these toolchains:
-
-- OpenMUPP v1: the xPack RISC-V GCC (`riscv-none-elf-gcc`).
-- STM32F1 boards: the Arm GNU Toolchain (`arm-none-eabi-gcc`).
-
-Get the submodules before the first build. `system-stm32` downloads the
-CMSIS headers from GitHub at configure time.
+The libraries are Git submodules in `dependencies/`.
+Clone with the submodules:
 
 ```sh
-git submodule update --init
+git clone --recurse-submodules https://github.com/OpenMUPP/openmupp-bootloader.git
 ```
 
-Each board has a CMake preset with the name of the board. Give the
-install directory of the toolchain on the command line:
+In an existing clone, run `git submodule update --init --recursive`.
+
+The submodules are:
+
+- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V30x. Only the OpenMUPP v1 board (`openmuppv1`) uses it. The primary repository is https://github.com/armint/ch32v00x-system.
+- `system-stm32`: start-up code, CMSIS and peripheral drivers of the STM32. Only the STM32F1 boards use it. The primary repository is https://github.com/armint/system-stm32.
+
+## Requirements
+
+- CMake 3.21 or later.
+- The xPack RISC-V GCC (`riscv-none-elf`), for example as in the build image of CI.
+- For the Versaloon Mini and the ST-Link boards only: the Arm GNU Toolchain (`arm-none-eabi`), for example 15.3.rel2 as in CI.
+- A host C++ compiler with C++23 support, for the unit tests.
+- `clang-format`, for the `clangformat` target.
+- Internet access at configure time: CMake FetchContent downloads doctest, and `system-stm32` downloads the CMSIS headers.
+
+## Build the bootloader
+
+Select a preset. Give the install directory of the toolchain with `-DGCC_TOOLCHAIN_PREFIX`. Then configure and build:
 
 ```sh
-cmake --preset openmuppv1 -DGCC_TOOLCHAIN_PREFIX=<RISC-V toolchain root>
-cmake --build --preset openmuppv1
+cmake --preset openmuppv1 \
+      -DGCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1
+cmake --build --preset openmuppv1 -j
 ```
 
-For an STM32F1 board, use its preset and the Arm toolchain:
+The build directory is `build/<preset>`, here `build/openmuppv1`.
+If the compiler of the toolchain is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
+The RISC-V toolchain file also reads the environment variable `RISCV_GCC_TOOLCHAIN_PREFIX` when `GCC_TOOLCHAIN_PREFIX` is not set.
+
+Each board has a preset with the name of the board.
+The STM32F1 boards (`mini`, `stlinkv21`, `stlinkv2miniclone`) need the Arm GNU Toolchain:
 
 ```sh
-cmake --preset mini -DGCC_TOOLCHAIN_PREFIX=<Arm toolchain root>
-cmake --build --preset mini
+cmake --preset mini \
+      -DGCC_TOOLCHAIN_PREFIX=/opt/arm-gnu-toolchain-15.3.rel2-x86_64-arm-none-eabi
+cmake --build --preset mini -j
 ```
 
-If the compiler is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
-The RISC-V toolchain file also reads the environment variable
-`RISCV_GCC_TOOLCHAIN_PREFIX` when `GCC_TOOLCHAIN_PREFIX` is not set.
+`cmake --list-presets` shows all presets.
 
-The build writes these files to `build/<board>/`:
+The build writes these files into the build directory:
 
 - `openmupp-bootloader-<board>.elf`
 - `openmupp-bootloader-<board>.hex`
