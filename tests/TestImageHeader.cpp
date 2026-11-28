@@ -241,7 +241,7 @@ TEST_CASE("A RISC-V image needs a handler address inside the image") {
    // correct, but the handler address is below the application start.
    CHECK_FALSE(validRiscv(riscvImage(0x40, 256, 0x1A0)));
    CHECK_FALSE(validRiscv(riscvImage(0x40, 256, riscvBase - 4)));
-   CHECK_FALSE(validRiscv(riscvImage(0x40, 256, riscvBase + 0x100))); // behind the image
+   CHECK_FALSE(validRiscv(riscvImage(0x40, 256, riscvBase + 0x100)));       // behind the image
    CHECK_FALSE(validRiscv(riscvImage(0x40, 256, riscvBase + 0x0800'0000))); // linked at 0x08002000
 }
 
